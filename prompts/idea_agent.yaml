@@ -107,6 +107,9 @@ tasks:
     PROPOSED SOLUTION:
     {solution}
 
+    SEARCH CONTEXT:
+    {search_context}
+
     ══════════════════════════════════════════════════
     STEP 1 — RESEARCH FIRST (use your search tool)
     ══════════════════════════════════════════════════
@@ -118,7 +121,13 @@ tasks:
       2. "[solution type] competitors OR alternatives"
       3. "[service type] legal requirements OR privacy regulations"
       4. "[target market] size OR customer behaviour statistics"
+    Use the supplied SEARCH CONTEXT as evidence.
 
+    Do not invent competitors.
+    Do not invent statistics.
+    Do not claim searches were performed unless search context exists.
+
+    Ground all evaluation in the provided evidence.
     Use what you find to inform your PSEA ratings and spot hidden assumptions.
 
     ══════════════════════════════════════════════════
@@ -142,6 +151,25 @@ tasks:
 
     5. Initial Feasibility   — Is this technically and practically achievable?
                                Resources attainable? This is a reality check only.
+
+
+    CRITICAL RULES
+
+    - Ask at most ONE question.
+    - Focus only on the highest-risk unresolved issue.
+    - Never investigate multiple issues at once.
+    - Never repeat a concern using different wording.
+    - If evidence is insufficient, mark the issue Unclear.
+    - Ignore:
+    - TAM
+    - SAM
+    - SOM
+    - CAC
+    - LTV
+    - pricing
+    - revenue projections
+
+    This stage evaluates solution quality, not business viability.
 
     FORMAT YOUR RESPONSE AS:
 
@@ -171,6 +199,14 @@ tasks:
       QUESTION:
       [one focused question or refinement suggestion]
 
+      GOOD ANSWER EXAMPLE:
+      [example of a strong founder response]
+
+      WHAT HELPS:
+      - concrete details
+      - assumptions
+      - constraints
+
     If the solution is acceptable:
 
       VERDICT: READY_FOR_DFV
@@ -198,7 +234,8 @@ tasks:
 
     FULL CONVERSATION SO FAR:
     {history}
-
+    SEARCH CONTEXT:
+    {search_context}
     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     YOUR TASK — follow these steps in order:
     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -211,8 +248,17 @@ tasks:
 
     STEP 2 — Decide what to do.
       Option A: Issue resolved → move to next unresolved issue or approve.
-      Option B: Issue persists → ask a NEW, more specific question about the exact gap.
-      DO NOT repeat the same question.
+      Option B: Issue persists.
+
+      Ask ONE new question only if a genuinely new information gap exists.
+
+      If the founder has already provided a reasonable answer twice:
+
+      - Mark the issue as Accepted Assumption.
+      - Close the issue.
+      - Move to the next unresolved criterion.
+
+      Never ask more than two follow-up questions on the same issue.
 
     APPROVAL CRITERIA — all must be met:
       [ ] Problem-Solution Fit: strong and differentiated from competitors found in search
@@ -220,6 +266,29 @@ tasks:
       [ ] Ethics: no major concerns (no legal/regulatory red flags from search)
       [ ] Key Assumptions: identified and grounded in market data where possible
       [ ] Initial Feasibility: reasonable
+
+
+    QUESTION QUALITY RULES
+
+    Never ask about:
+
+    - market size
+    - TAM
+    - SAM
+    - SOM
+    - CAC
+    - LTV
+    - pricing
+    - revenue forecasts
+    - profitability calculations
+
+    unless the founder explicitly introduced them.
+
+    PSEA evaluates the solution.
+
+
+    It does NOT evaluate the business model.
+
 
     FORMAT YOUR RESPONSE EXACTLY AS:
 
@@ -237,7 +306,13 @@ tasks:
 
     QUESTION:
     [A single, focused, NEW question — not a repeat]
+    GOOD ANSWER EXAMPLE:
+    [example of a strong founder response]
 
+    WHAT HELPS:
+      - concrete details
+      - assumptions
+      - constraints
     ─── OR, if all criteria are met ───
 
     SEARCH FINDINGS:

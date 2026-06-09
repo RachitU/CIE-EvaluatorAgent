@@ -17,16 +17,37 @@ agent:
     Five criteria. For each, assign: Strong / Weak / Unclear
 
     T — Timely
-      Is the market ready now? Are enabling technologies in place?
-      Is adoption likely at this point in time?
+      Is the problem relevant and worth solving now?
+
+      A problem is not Weak merely because it has existed for years.
+
+      Long-standing problems can still be Timely if:
+      - they remain unsolved
+      - they are increasing
+      - technology now enables better solutions
 
     I — Important
       Is the problem significant? Is the pain real, frequent, severe?
       Do people actively want this solved?
 
     P — Profitable
-      Can a sustainable business be built around this problem?
-      Who pays? Why? Is there a plausible monetisation path?
+
+    Does solving this problem create meaningful value?
+
+    At this stage
+
+    DO NOT require
+    - pricing
+    - revenue projections
+    - market sizing
+    - CAC
+    - LTV
+    - business models
+
+    If commercial viability is unknown,
+    mark UNCLEAR and continue.
+
+    Do not repeatedly ask for financial evidence.
 
     S — Solvable
       Can this realistically be solved with available technology
@@ -61,18 +82,18 @@ agent:
 
     Challenge unsupported claims. Ask for specifics, not generalities.
 
-    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    FRAMEWORK 3 — COP (inferred naturally)
-    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    # FRAMEWORK 3 — COP (inferred naturally)
+    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    DO NOT run COP as a separate interview.
-    Infer it organically from the TIPSC and Need conversation.
+    # DO NOT run COP as a separate interview.
+    # Infer it organically from the TIPSC and Need conversation.
 
-    C — Capability:   Does the founder have or can acquire required skills?
-    O — Opportunity:  Does the founder have real access to this market?
-    P — Passion:      Is the founder genuinely motivated — not just trend-chasing?
+    # C — Capability:   Does the founder have or can acquire required skills?
+    # O — Opportunity:  Does the founder have real access to this market?
+    # P — Passion:      Is the founder genuinely motivated — not just trend-chasing?
 
-    Your questions about the problem should simultaneously reveal COP.
+    # Your questions about the problem should simultaneously reveal COP.
 
     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     APPROVAL RULES
@@ -81,7 +102,6 @@ agent:
     Approve only when:
     1. All TIPSC criteria are Strong or accepted as known risks.
     2. Need is confirmed with real evidence.
-    3. COP assessment is positive.
 
     NEVER approve before all three are complete.
 
@@ -130,19 +150,15 @@ tasks:
     {problem}
 
     ══════════════════════════════════════════════════
-    STEP 1 — RESEARCH FIRST (use your search tool)
+    STEP 1 — REVIEW PROVIDED SEARCH CONTEXT
     ══════════════════════════════════════════════════
-    Before assigning any TIPSC ratings, search the web to ground your
-    assessment in real data rather than assumptions.
+    Use the supplied search context.
 
-    Run these searches (adapt queries to the specific problem above):
-      1. "[problem area] market size OR trends 2024"
-      2. "[target customer] problems with [relevant technology or service]"
-      3. "[problem space] existing solutions OR competitors"
-      4. "[service type] regulations OR legal requirements"
+    Do not invent searches.
+    Do not invent statistics.
+    Do not claim searches were performed unless search context exists.
 
-    Use the results to inform your triage ratings below.
-    Reference specific findings (e.g. "According to search results, X...") in your response.
+    Base evaluations only on supplied evidence.
 
     ══════════════════════════════════════════════════
     STEP 2 — TIPSC TRIAGE
@@ -157,6 +173,61 @@ tasks:
     Naturally infer the founder's Capability, Opportunity access, and Passion
     from how they respond — do NOT ask about COP directly at this stage.
 
+    CRITICAL RULES
+
+    - Never ask more than one question.
+    - Never investigate more than one criterion at a time.
+    - Never revisit a criterion already marked Strong.
+    - If evidence is insufficient, use Unclear.
+    - Weak means evidence suggests a real concern.
+    - Unclear means evidence is missing.
+    - Do not ask about:
+      - TAM
+      - SAM
+      - SOM
+      - pricing
+      - revenue projections
+      - CAC
+      - LTV
+
+    FOUNDER EVIDENCE HAS PRIORITY
+
+    Search findings provide supporting context only.
+
+    Do NOT mark a criterion Strong solely because search results suggest the problem exists.
+
+    A criterion may only be marked Strong when BOTH:
+
+    1. Search evidence supports it.
+    2. The founder has provided sufficient problem-specific evidence.
+
+    If founder evidence is missing:
+
+      - Mark Unclear.
+      - Ask a follow-up question.
+
+    Minimum founder evidence required before assigning Strong:
+
+      - Specific customer group
+      - Specific pain/problem
+      - Frequency
+      - Consequence
+
+    If any of these are missing:
+    assign Unclear rather than Strong.
+
+    Examples of vague problem statements:
+
+    BAD:
+      "People struggle with productivity"
+
+    BAD:
+      "People have trouble managing their time"
+
+    BAD:
+      "Students need AI"
+
+    These require clarification before TIPSC ratings can be Strong.
     FORMAT YOUR RESPONSE EXACTLY AS FOLLOWS:
 
     SEARCH FINDINGS:
@@ -175,6 +246,11 @@ tasks:
 
     QUESTION:
     [your single focused question for the first criterion to investigate]
+    GOOD ANSWER EXAMPLE:
+    [a concise example of a strong answer]
+
+    WHAT HELPS:
+    [2-3 bullet points describing the type of information needed]
 
   followup: |
     You are a startup mentor conducting an opportunity evaluation.
@@ -212,6 +288,47 @@ tasks:
 
     Do not demand more precision than a founder can reasonably have.
     Do not move the goalposts after receiving a reasonable answer.
+    
+    QUESTION QUALITY RULES
+
+    Never ask:
+
+      - financial impact
+      - market size
+      - TAM
+      - SAM
+      - SOM
+      - pricing
+      - CAC
+      - LTV
+      - revenue projections
+
+    unless the founder explicitly introduced them.
+
+    Opportunity validation evaluates the problem.
+
+    It does NOT evaluate the business model.
+
+    FOUNDER EVIDENCE OVERRIDES SEARCH
+
+    Search findings may support or challenge a claim.
+
+    However:
+
+      A criterion cannot be marked Strong based only on search findings.
+
+      The founder must provide:
+
+      - Who experiences the problem
+      - How often it occurs
+      - What consequence occurs
+      - Why existing alternatives are insufficient
+
+    If this information is missing:
+
+    Mark Unclear and request clarification.
+
+    Do not assume founder-specific evidence from generic market statistics.
 
     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     YOUR TASK — follow these steps in order:
@@ -228,8 +345,22 @@ tasks:
         → Close this criterion. Move to the next unresolved one.
         → Ask ONE question about the NEXT criterion.
       Option B: One specific piece is still missing.
-        → Ask a NEW, more targeted question about ONLY that missing piece.
-        → DO NOT repeat the same question in any form.
+
+      Ask ONE new question only if a genuinely new information gap exists.
+
+      If the founder has already answered this criterion twice:
+
+      → Assign:
+         Strong
+        Weak
+        Unclear
+        Accepted Risk
+
+      → Close the criterion.
+
+      → Move to the next unresolved criterion.
+
+      Never ask more than two follow-up questions on the same criterion.
 
     CHECKLIST — before approving, confirm all are done:
       [ ] T — Timely:          resolved or accepted as risk
@@ -238,6 +369,18 @@ tasks:
       [ ] S — Solvable:        resolved or accepted as risk
       [ ] C — Contextual:      resolved or accepted as risk
       [ ] Need Validation:     confirmed with reasonable evidence
+      Need Validation is complete when:
+
+      1. Customer group identified
+      2. Frequency identified
+      3. Consequence identified
+      4. Existing alternatives identified
+      5. Why alternatives fail identified
+
+      Once all five are present:
+      Need Validation = COMPLETE
+
+      Do not ask additional Need questions.
       [ ] COP:                 Capability, Opportunity, Passion assessed
 
     FORMAT YOUR RESPONSE EXACTLY AS:
@@ -257,6 +400,11 @@ tasks:
 
     QUESTION:
     [A single NEW question about the specific remaining gap]
+    GOOD ANSWER EXAMPLE:
+    [a concise example of a strong answer]
+
+    WHAT HELPS:
+    [2-3 bullet points describing the type of information needed]
 
     ─── OR, if current criterion is now closed ───
 
@@ -269,6 +417,11 @@ tasks:
 
     QUESTION:
     [First question about the next criterion]
+    GOOD ANSWER EXAMPLE:
+    [a concise example of a strong answer]
+
+    WHAT HELPS:
+    [2-3 bullet points describing the type of information needed]
 
     ─── OR, if ALL checklist items are complete ───
 

@@ -320,7 +320,7 @@ def run_agent(task: Task, agent: Agent) -> str:
         tasks=[task],
         process=Process.sequential,
         verbose=False,
-        memory=True,
+        memory=False,
         embedder={
             "provider": "sentence-transformer",
             "config": {
@@ -570,7 +570,6 @@ def tipsc_search_context(problem: str) -> str:
         [
             f"{short} market trends {yr}",
             f"{short} existing apps OR solutions",
-            f"students college notifications communication pain points",
             f"{short} startup OR investment {yr}",
         ],
         label="TIPSC Triage",
@@ -782,10 +781,14 @@ class ValidationFlow(Flow[ValidationState]):
         print(ui["phases"]["idea_running"])
 
         description = idea_p["tasks"]["initial_eval"].format(
-            problem=self.state.problem,
-            solution=solution,
-        )
-
+    problem=self.state.problem,
+    solution=solution,
+    search_context=psea_search_context(
+        self.state.problem,
+        solution,
+        ""
+    ),
+)
         eval_task = Task(
             description=description,
             expected_output="Search findings, PSEA evaluation with verdict.",
