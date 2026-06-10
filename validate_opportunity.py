@@ -35,6 +35,7 @@ from datetime import datetime
 from typing import List
 from pydantic import BaseModel
 from crewai import Agent, Task, Crew, Process, LLM
+from crewai.memory import Memory
 from crewai.flow.flow import Flow, listen, start
 from crewai_tools import SerperDevTool
 
@@ -55,6 +56,7 @@ def _load_yaml(rel_path: str) -> dict:
 cfg      = _load_yaml("config/settings.yaml")
 opp_p    = _load_yaml("prompts/opportunity_agent.yaml")
 idea_p   = _load_yaml("prompts/idea_agent.yaml")
+scout_p  = _load_yaml("prompts/market_scout_agent.yaml")
 ui       = _load_yaml("prompts/ui_strings.yaml")
 
 # ── Convenience accessors ──────────────────────────────────────
@@ -77,6 +79,44 @@ llm = LLM(
     base_url=llm_cfg["base_url"],
     api_key=llm_cfg["api_key"],
 )
+
+# ── Memory setup ─────────────────────────────────────────────
+# Memory is instantiated once and used directly via .remember()
+# and .recall(). It is NOT passed to Crew() — that causes an
+# async event loop conflict. Memory handles its own threading
+# internally via a background ThreadPoolExecutor.
+_mem_cfg = cfg.get("memory", {})
+_mem_storage_path = str(
+    BASE_DIR / _mem_cfg.get("storage_path", ".crewai/memory")
+)
+
+try:
+    memory = Memory(
+        llm=llm,
+        storage=_mem_storage_path,
+        embedder={
+            "provider": "sentence-transformer",
+            "config": {
+                "model_name": _mem_cfg.get(
+                    "embedder_model",
+                    "all-MiniLM-L6-v2"
+                )
+            },
+        },
+        recency_weight=_mem_cfg.get("recency_weight", 0.3),
+        semantic_weight=_mem_cfg.get("semantic_weight", 0.5),
+        importance_weight=_mem_cfg.get("importance_weight", 0.2),
+        recency_half_life_days=_mem_cfg.get(
+            "recency_half_life_days",
+            30
+        ),
+    )
+
+    print("✓ CrewAI Memory initialized")
+
+except Exception as e:
+    print(f"⚠ Memory initialization failed: {e}")
+    memory = None
 
 agent_tools = [SerperDevTool()]
 
@@ -106,6 +146,11 @@ else:
 class ValidationState(BaseModel):
     problem:  str = ""
     solution: str = ""
+
+    # ── Market Scout (Phase 0) ─────────────────────────────────
+    market_verdict: str = ""   # "REJECT" or "PROCEED"
+    market_report:  str = ""   # Full competitive landscape report
+    market_angle:   str = ""   # Founder's creative differentiation angle
 
     # Separate conversation histories per agent
     opp_history:  List[dict] = []   # {"role": "agent"|"user", "content": str}
@@ -147,30 +192,31 @@ def extract_displayed_question(text: str) -> str:
     """
     Pull the question the agent is asking out of any response format.
 
-    The model (especially small LLMs) does not always follow the structured
-    template. This function tries multiple fallback strategies so there is
-    always something concrete shown to the user.
-
     Strategy 1 — Explicit QUESTION: section (expected format).
     Strategy 2 — Last line in the response that ends with '?'.
     Strategy 3 — Substring around the last '?' anywhere in the text.
     Strategy 4 — Generic fallback.
     """
-    # Strategy 1: look for the QUESTION: marker we ask the model to include
     if "QUESTION:" in text.upper():
-        idx   = text.upper().rfind("QUESTION:")   # rfind → take the last one
+        idx   = text.upper().rfind("QUESTION:")
         chunk = text[idx + len("QUESTION:"):].strip()
         line  = chunk.split("\n")[0].strip()
         if len(line) > 5:
             return line
 
+<<<<<<< Updated upstream
     # Strategy 2: last non-empty line that ends with a '?'
+=======
+>>>>>>> Stashed changes
     for line in reversed(text.strip().split("\n")):
         line = line.strip()
         if line.endswith("?") and len(line) > 10:
             return line
 
+<<<<<<< Updated upstream
     # Strategy 3: substring from last sentence boundary to last '?'
+=======
+>>>>>>> Stashed changes
     if "?" in text:
         last_q  = text.rfind("?")
         before  = text[:last_q]
@@ -179,7 +225,10 @@ def extract_displayed_question(text: str) -> str:
         if len(fragment) > 10:
             return fragment
 
+<<<<<<< Updated upstream
     # Strategy 4: generic fallback from UI strings
+=======
+>>>>>>> Stashed changes
     return ui["agent_display"]["fallback_question"]
 
 
@@ -199,22 +248,15 @@ def _wrap(text: str, width: int = W - 4) -> List[str]:
 
 
 def agent_says(text: str) -> None:
-    """
-    Print the agent's response then always render the question in its own
-    clearly labelled block — so the user never has to hunt for what to answer.
-
-    Works regardless of whether the model followed the structured template.
-    """
+    """Print agent response and highlight the question."""
     question = extract_displayed_question(text)
     label    = ui["agent_display"]["asking_label"]
 
-    # Full agent response
     print()
     hr("-")
     print(text.strip())
     hr("-")
 
-    # Question callout — always shown below
     print()
     print("=" * W)
     print(f"  {label}")
@@ -237,37 +279,27 @@ def ask(prompt: str = "") -> str:
 def format_history(history: List[dict]) -> str:
     """
     Build a minimal context block for the agent — NOT a full transcript.
-
-    Instead of dumping every turn, we extract only:
-      - Resolved criterion verdicts (scraped from agent responses)
-      - The last N Q&A pairs (enough for the model to stay oriented)
-
-    This keeps the prompt small for smaller LLMs while preserving
-    the state the agent actually needs to make a good decision.
+    Extracts resolved verdicts and the last 2 Q&A pairs only.
     """
     if not history:
         return "(No prior conversation.)"
 
-    # ── 1. Scrape resolved verdicts from all agent turns ──────
     verdict_lines = []
     for turn in history:
         if turn["role"] != "agent":
             continue
         text = turn["content"]
-        # Look for lines like "T — Timely: Strong — ..."
         for line in text.split("\n"):
             l = line.strip()
             if any(l.startswith(f"{c} —") or l.startswith(f"{c}:") for c in "TIPSCN"):
                 if any(w in l.upper() for w in ("STRONG", "WEAK", "ACCEPTED", "UNCLEAR", "CONFIRMED", "RESOLVED")):
                     verdict_lines.append(f"  {l}")
 
-    # ── 2. Keep only the last 2 Q&A pairs ─────────────────────
     qa_pairs = []
     i = len(history) - 1
     while i >= 0 and len(qa_pairs) < 2:
         if history[i]["role"] == "user":
             answer = history[i]["content"]
-            # Find the question that preceded it
             for j in range(i - 1, -1, -1):
                 if history[j]["role"] == "agent":
                     q_text = history[j]["content"]
@@ -284,10 +316,9 @@ def format_history(history: List[dict]) -> str:
         else:
             i -= 1
 
-    # ── 3. Assemble ───────────────────────────────────────────
     parts = []
     if verdict_lines:
-        seen = list(dict.fromkeys(verdict_lines))   # deduplicate, preserve order
+        seen = list(dict.fromkeys(verdict_lines))
         parts.append("RESOLVED SO FAR:\n" + "\n".join(seen))
     if qa_pairs:
         parts.append("RECENT EXCHANGES:\n" + "\n\n".join(qa_pairs))
@@ -298,6 +329,7 @@ def format_history(history: List[dict]) -> str:
 def run_agent(task: Task, agent: Agent) -> str:
     """
     Run a single-agent crew and return a clean plain-text string.
+<<<<<<< Updated upstream
 
     When agents use tools (e.g. SerperDevTool), CrewAI includes the full
     reasoning trace in the string output — raw JSON dumps from Serper, chain-
@@ -306,21 +338,28 @@ def run_agent(task: Task, agent: Agent) -> str:
 
     clean_agent_output() strips that noise by finding the first known section
     header in our structured format and returning only what follows it.
+=======
+    Memory is handled externally via memory.remember() / memory.recall()
+    and is never passed to Crew() to avoid async event loop conflicts.
+>>>>>>> Stashed changes
     """
     crew = Crew(
         agents=[agent],
         tasks=[task],
         process=Process.sequential,
+<<<<<<< Updated upstream
         verbose=False
+=======
+        verbose=False,
+>>>>>>> Stashed changes
     )
     raw = str(crew.kickoff())
     return clean_agent_output(raw)
 
 
-# Section headers that always mark the START of the agent's formatted response.
-# Everything in the string before the first matching header is noise
-# (Serper JSON, chain-of-thought, tool call traces) and gets discarded.
 _RESPONSE_MARKERS = [
+    "VERDICT: REJECT",
+    "VERDICT: PROCEED",
     "TIPSC TRIAGE:",
     "SEARCH FINDINGS:",
     "PSEA EVALUATION:",
@@ -333,18 +372,7 @@ _RESPONSE_MARKERS = [
 
 
 def clean_agent_output(text: str) -> str:
-    """
-    Strip tool-call noise from a raw CrewAI agent output string.
-
-    Strategy:
-      1. Scan for the earliest occurrence of any known structured section header.
-      2. Return the text from that point onward (the actual formatted response).
-      3. Fallback A: if the model used ReAct format, extract after 'Final Answer:'.
-      4. Fallback B: return the raw text stripped of leading/trailing whitespace.
-
-    This is deliberately defensive — if none of the heuristics match we still
-    return something rather than crashing.
-    """
+    """Strip tool-call noise from a raw CrewAI agent output string."""
     text_upper = text.upper()
     earliest   = len(text)
 
@@ -356,22 +384,15 @@ def clean_agent_output(text: str) -> str:
     if earliest < len(text):
         return text[earliest:].strip()
 
-    # Fallback A — ReAct agents sometimes emit "Final Answer: ..."
     if "FINAL ANSWER:" in text_upper:
         idx = text_upper.find("FINAL ANSWER:")
         return text[idx + len("FINAL ANSWER:"):].strip()
 
-    # Fallback B — nothing matched; return stripped raw text
     return text.strip()
 
 
 def last_exchange(history: List[dict]) -> tuple[str, str]:
-    """
-    Extract the most recent (agent_question, user_answer) pair from history.
-    Returns ("(none)", "(none)") if there isn't a complete pair yet.
-    Small LLMs forget context easily — passing these explicitly and prominently
-    is more reliable than relying on them reading through the full transcript.
-    """
+    """Extract the most recent (agent_question, user_answer) pair from history."""
     last_q = "(none)"
     last_a = "(none)"
     for turn in reversed(history):
@@ -393,15 +414,11 @@ def extract_question(text: str) -> str:
     if "QUESTION:" in text.upper():
         idx = text.upper().find("QUESTION:")
         return text[idx + len("QUESTION:"):].strip().split("\n")[0].strip()
-    return text.strip()[:200]   # fallback: first 200 chars
+    return text.strip()[:200]
 
 
 def repetition_warning(last_q: str, current_q: str) -> str:
-    """
-    If the new question is suspiciously similar to the last one, return an
-    injected warning to include in the next prompt. Otherwise empty string.
-    Similarity is measured by word overlap.
-    """
+    """Return warning string if new question is too similar to the last one."""
     if not last_q or last_q == "(none)":
         return ""
     lq_words = set(last_q.lower().split())
@@ -418,20 +435,15 @@ def repetition_warning(last_q: str, current_q: str) -> str:
 
 
 def opp_approved(text: str) -> bool:
-    """Case-insensitive check for opportunity approval signal."""
     return "STATUS: APPROVED" in text.upper()
 
 
 def idea_ready(text: str) -> bool:
-    """Case-insensitive check for idea readiness signal."""
     return "VERDICT: READY_FOR_DFV" in text.upper()
 
 
 def parse_criterion(text: str) -> str:
-    """
-    Extract the single-letter criterion code from a CRITERION IN FOCUS: line.
-    Returns one of T, I, P, S, C, or N (Need), or "" if not found.
-    """
+    """Extract the single-letter criterion code from a CRITERION IN FOCUS: line."""
     marker = "CRITERION IN FOCUS:"
     if marker not in text.upper():
         return ""
@@ -443,7 +455,6 @@ def parse_criterion(text: str) -> str:
     return ""
 
 
-# ── Criterion metadata ─────────────────────────────────────────
 _CRITERION_NAMES = {
     "T": "Timely", "I": "Important", "P": "Profitable",
     "S": "Solvable", "C": "Contextual", "N": "Need Validation",
@@ -467,10 +478,7 @@ _PSEA_SEARCH_GUIDANCE = {
 
 
 def force_close_instruction(criterion: str, turns: int) -> str:
-    """
-    Return an injected instruction block when a criterion has been probed
-    too many times without being closed.  Empty string otherwise.
-    """
+    """Return forced-close instruction block when a criterion is stuck."""
     if turns < MAX_TURNS_PER_CRITERION:
         return ""
     name     = _CRITERION_NAMES.get(criterion, criterion)
@@ -478,15 +486,63 @@ def force_close_instruction(criterion: str, turns: int) -> str:
     return template.format(turns=turns, name=name, criterion=criterion)
 
 
+def _safe_memory_save(content: str, scope: str) -> None:
+    if memory is None:
+        return
+
+    try:
+        memory.remember(
+            content=content,
+            scope=scope,
+            categories=[scope.split("/")[0]],
+            importance=0.7,
+        )
+        print(f"  [memory] saved -> {scope}")
+
+    except Exception as e:
+        print(f"  [memory] save failed: {e}")
+
+
+def _safe_memory_recall(query: str, scope: str, limit: int = 3) -> str:
+    if memory is None:
+        return ""
+
+    try:
+        matches = memory.recall(
+            query=query,
+            scope=scope,
+            limit=limit,
+            depth="shallow",
+        )
+
+        if not matches:
+            print("  [memory] no matches found")
+            return ""
+
+        print(f"  [memory] recalled {len(matches)} records")
+
+        lines = [
+            f"  - {m.record.content[:200]}"
+            for m in matches
+        ]
+
+        return (
+            "\nPAST CONTEXT FROM MEMORY:\n"
+            + "\n".join(lines)
+            + "\n"
+        )
+
+    except Exception as e:
+        print(f"  [memory] recall failed: {e}")
+        return ""
+
+
 # ══════════════════════════════════════════════════════════════
 # WEB SEARCH HELPERS
 # ══════════════════════════════════════════════════════════════
 
 def _serper_search(query: str) -> str:
-    """
-    Execute one Serper search and return compact formatted results.
-    Called only from the fetch_* wrappers below — never from agent code.
-    """
+    """Execute one Serper search and return compact formatted results."""
     num = _search["results_per_query"]
     timeout = _search["timeout_seconds"]
     web_cfg = ui["web_context"]
@@ -506,13 +562,11 @@ def _serper_search(query: str) -> str:
         data  = r.json()
         lines = []
 
-        # Direct answer box (highest signal)
         ab      = data.get("answerBox", {})
         ab_text = ab.get("answer") or ab.get("snippet", "")
         if ab_text:
             lines.append(f"  [Direct answer] {ab_text.strip()}")
 
-        # Organic snippets
         for item in data.get("organic", [])[:num]:
             title   = item.get("title", "").strip()
             snippet = item.get("snippet", "").strip()
@@ -525,10 +579,7 @@ def _serper_search(query: str) -> str:
 
 
 def _fetch_web_context(queries: List[str], label: str) -> str:
-    """
-    Run a list of queries and return a formatted block ready to inject
-    into a task description.  Returns empty string if search is off.
-    """
+    """Run queries and return a formatted block for task injection."""
     if not _search_on or not queries:
         return ""
     web_cfg  = ui["web_context"]
@@ -563,10 +614,7 @@ def tipsc_search_context(problem: str) -> str:
 
 
 def criterion_search_context(criterion: str, problem: str) -> str:
-    """
-    Targeted context for the specific TIPSC criterion currently being probed.
-    Queries are built from the actual problem text so they're always relevant.
-    """
+    """Targeted context for the specific TIPSC criterion being probed."""
     yr    = datetime.now().year
     short = problem[:55].rstrip()
     queries_map = {
@@ -582,10 +630,7 @@ def criterion_search_context(criterion: str, problem: str) -> str:
 
 
 def psea_search_context(problem: str, solution: str, issue: str = "") -> str:
-    """
-    Context for PSEA idea evaluation.  `issue` is one of P/S/E/A for targeted
-    refinement searches; empty string triggers the broad initial-pass queries.
-    """
+    """Context for PSEA idea evaluation."""
     yr      = datetime.now().year
     short_p = problem[:50].rstrip()
     short_s = solution[:50].rstrip()
@@ -617,6 +662,22 @@ def psea_search_context(problem: str, solution: str, issue: str = "") -> str:
     return _fetch_web_context(queries, label=label)
 
 
+def market_scout_search_context(problem: str) -> str:
+    """Comprehensive competitive intelligence searches for the Market Scout Agent."""
+    yr    = datetime.now().year
+    short = problem[:55].rstrip()
+    return _fetch_web_context(
+        [
+            f"{short} existing apps OR platforms OR solutions {yr}",
+            f"{short} market leaders competitors funding",
+            f"{short} user complaints OR limitations OR missing features",
+            f"{short} market size OR growth rate {yr}",
+            f"{short} new startup launch OR recent entrant {yr}",
+        ],
+        label="Competitive Landscape",
+    )
+
+
 # ══════════════════════════════════════════════════════════════
 # AGENTS
 # ══════════════════════════════════════════════════════════════
@@ -636,6 +697,15 @@ idea_agent = Agent(
     backstory=idea_p["agent"]["backstory"],
     verbose=False,
     tools=agent_tools,
+    llm=llm,
+)
+
+market_scout_agent = Agent(
+    role=scout_p["agent"]["role"],
+    goal=scout_p["agent"]["goal"],
+    backstory=scout_p["agent"]["backstory"],
+    verbose=False,
+    tools=[],
     llm=llm,
 )
 
@@ -659,15 +729,107 @@ class ValidationFlow(Flow[ValidationState]):
         return self.state.problem
 
     # ──────────────────────────────────────────────────────────
-    # STEP 2 — TIPSC Triage (first pass)
+    # STEP 2 — Market Intelligence Scan  (Phase 0)
     # ──────────────────────────────────────────────────────────
 
     @listen(collect_problem)
+    def market_scan(self, problem):
+        ms  = ui["market_scout"]
+        section(ms["header"])
+        print(ms["running"])
+
+        web_ctx     = market_scout_search_context(problem)
+        description = scout_p["tasks"]["scan"].format(
+            problem     = problem,
+            web_context = web_ctx,
+        )
+
+        scan_task = Task(
+            description=description,
+            expected_output="Competitive landscape report with VERDICT: REJECT or VERDICT: PROCEED.",
+            agent=market_scout_agent,
+        )
+
+        result = run_agent(scan_task, market_scout_agent)
+        self.state.market_report = result
+
+        verdict = "PROCEED"
+        if "VERDICT: REJECT" in result.upper():
+            verdict = "REJECT"
+        elif "VERDICT: PROCEED" in result.upper():
+            verdict = "PROCEED"
+        self.state.market_verdict = verdict
+
+        # ── Save market scan to CrewAI Memory ─────────────────
+        _safe_memory_save(
+            content=f"Market scan verdict: {verdict} | Problem: {problem[:100]}",
+            scope="market/scout",
+        )
+
+        if verdict == "REJECT":
+            section(ms["section_reject"])
+            print(result)
+            hr("-")
+            print(f"\n  {ms['reject_banner']}\n")
+            hr("-")
+
+            choice = ask(ms["reject_prompt"])
+            if choice.strip().lower() != ms["reject_continue_keyword"]:
+                print(f"\n  {ms['reject_exit_message']}\n")
+                sys.exit(0)
+
+            print("\n  Proceeding at founder's discretion.\n")
+
+        else:
+            section(ms["section_proceed"])
+            print(result)
+            hr("-")
+            print(f"\n  {ms['proceed_banner']}\n")
+            hr("-")
+
+        print()
+        print("=" * W)
+        print(f"  {ms['creative_header']}")
+        print("=" * W)
+        for line in _wrap(ms["creative_prompt"]):
+            print(f"  {line}")
+        print("=" * W)
+        print()
+
+        angle = ask()
+        self.state.market_angle = angle
+
+        return problem
+
+    # ──────────────────────────────────────────────────────────
+    # STEP 3 — TIPSC Triage (first pass)
+    # ──────────────────────────────────────────────────────────
+
+    @listen(market_scan)
     def tipsc_triage(self, problem):
         section(ui["phases"]["opportunity_header"])
         print(ui["phases"]["opportunity_running"])
 
-        description = opp_p["tasks"]["triage"].format(problem=problem)
+        # ── Recall past TIPSC evaluations for similar problems ─
+        past_context = _safe_memory_recall(
+            query=f"TIPSC evaluation for: {problem[:80]}",
+            scope="opportunity/tipsc",
+            limit=2,
+        )
+
+        angle_block = ""
+        if self.state.market_angle:
+            angle_block = (
+                f"\nFOUNDER'S DIFFERENTIATION ANGLE:\n"
+                f"{self.state.market_angle}\n"
+                f"(Keep this in mind when evaluating T, I, P, and S criteria.)\n"
+            )
+
+        description = (
+            opp_p["tasks"]["triage"].format(problem=problem)
+            + angle_block
+            + past_context
+        )
 
         triage_task = Task(
             description=description,
@@ -681,14 +843,16 @@ class ValidationFlow(Flow[ValidationState]):
         self.state.opp_report  = result
         self.state.opp_status  = "IN_PROGRESS"
 
+        # ── Save triage result to CrewAI Memory ───────────────
+        _safe_memory_save(
+            content=f"TIPSC triage | Problem: {problem[:100]}\n{result[:300]}",
+            scope="opportunity/tipsc",
+        )
+
         return result
 
     # ──────────────────────────────────────────────────────────
-    # STEP 3 — Opportunity Deep-Dive Loop
-    #
-    # Continues until the agent issues STATUS: APPROVED.
-    # Code-level criterion turn tracking forces advancement so
-    # the model cannot get stuck probing a single criterion.
+    # STEP 4 — Opportunity Deep-Dive Loop
     # ──────────────────────────────────────────────────────────
 
     @listen(tipsc_triage)
@@ -699,7 +863,6 @@ class ValidationFlow(Flow[ValidationState]):
 
             agent_says(report)
 
-            # Parse and track which criterion is active
             criterion = parse_criterion(report)
             if criterion:
                 self.state.current_criterion = criterion
@@ -724,13 +887,13 @@ class ValidationFlow(Flow[ValidationState]):
             history_text   = format_history(self.state.opp_history)
 
             description = opp_p["tasks"]["followup"].format(
-                force_close    = force_close,
-                rep_warning    = rep_warning,
+                force_close     = force_close,
+                rep_warning     = rep_warning,
                 search_guidance = srch_guidance,
-                last_q         = last_q,
-                last_a         = last_a,
-                problem        = self.state.problem,
-                history        = history_text,
+                last_q          = last_q,
+                last_a          = last_a,
+                problem         = self.state.problem,
+                history         = history_text,
             )
 
             followup_task = Task(
@@ -741,11 +904,33 @@ class ValidationFlow(Flow[ValidationState]):
 
             report = run_agent(followup_task, opportunity_agent)
             self.state.opp_last_q = extract_question(report)
+
+            # ── Save per-criterion verdict to CrewAI Memory ───
+            criterion = parse_criterion(report)
+            if criterion:
+                _safe_memory_save(
+                    content=(
+                        f"Criterion {criterion} "
+                        f"({_CRITERION_NAMES.get(criterion, criterion)}) evaluated "
+                        f"| Problem: {self.state.problem[:80]}"
+                    ),
+                    scope=f"opportunity/tipsc/{criterion.lower()}",
+                )
+
             self.state.opp_history.append({"role": "agent", "content": report})
             self.state.opp_report = report
 
         # Opportunity approved
         self.state.opp_status = "APPROVED"
+
+        # ── Save approval to CrewAI Memory ────────────────────
+        _safe_memory_save(
+            content=(
+                f"OPPORTUNITY APPROVED | Problem: {self.state.problem}\n"
+                f"Summary: {report[:400]}"
+            ),
+            scope="opportunity/tipsc",
+        )
 
         section(ui["section_titles"]["opp_valid"])
         print(report)
@@ -758,7 +943,7 @@ class ValidationFlow(Flow[ValidationState]):
         return self.state.solution
 
     # ──────────────────────────────────────────────────────────
-    # STEP 4 — Initial PSEA Evaluation (first pass)
+    # STEP 5 — Initial PSEA Evaluation (first pass)
     # ──────────────────────────────────────────────────────────
 
     @listen(opportunity_loop)
@@ -786,9 +971,7 @@ class ValidationFlow(Flow[ValidationState]):
         return result
 
     # ──────────────────────────────────────────────────────────
-    # STEP 5 — Idea Refinement Loop
-    #
-    # Continues until the agent issues VERDICT: READY_FOR_DFV.
+    # STEP 6 — Idea Refinement Loop
     # ──────────────────────────────────────────────────────────
 
     @listen(evaluate_idea)
@@ -806,7 +989,6 @@ class ValidationFlow(Flow[ValidationState]):
             rep_warning    = repetition_warning(self.state.idea_last_q, last_q)
             history_text   = format_history(self.state.idea_history)
 
-            # Parse which PSEA criterion is active for targeted search guidance
             active_issue = ""
             if "ISSUE IN FOCUS:" in report.upper():
                 idx  = report.upper().find("ISSUE IN FOCUS:")
@@ -818,13 +1000,13 @@ class ValidationFlow(Flow[ValidationState]):
             psea_search = _PSEA_SEARCH_GUIDANCE.get(active_issue, "")
 
             description = idea_p["tasks"]["refinement"].format(
-                rep_warning    = rep_warning,
+                rep_warning     = rep_warning,
                 search_guidance = psea_search,
-                last_q         = last_q,
-                last_a         = last_a,
-                problem        = self.state.problem,
-                solution       = self.state.solution,
-                history        = history_text,
+                last_q          = last_q,
+                last_a          = last_a,
+                problem         = self.state.problem,
+                solution        = self.state.solution,
+                history         = history_text,
             )
 
             refinement_task = Task(
@@ -839,15 +1021,26 @@ class ValidationFlow(Flow[ValidationState]):
             self.state.idea_report = report
 
         self.state.idea_status = "READY_FOR_DFV"
+
+        # ── Save idea approval to CrewAI Memory ───────────────
+        _safe_memory_save(
+            content=(
+                f"IDEA APPROVED FOR DFV | Problem: {self.state.problem[:80]} "
+                f"| Solution: {self.state.solution[:80]}"
+            ),
+            scope="idea/psea",
+        )
+
         return report
 
     # ──────────────────────────────────────────────────────────
-    # STEP 6 — Final Report
+    # STEP 7 — Final Report
     # ──────────────────────────────────────────────────────────
 
     @listen(idea_loop)
     def final_report(self, idea_result):
         labels = ui["report_labels"]
+        ms     = ui["market_scout"]
 
         section(ui["section_titles"]["final"])
 
@@ -855,6 +1048,16 @@ class ValidationFlow(Flow[ValidationState]):
         print(f"  {labels['problem']}")
         hr("-")
         print(f"  {self.state.problem}")
+        print()
+
+        hr("-")
+        print(f"  {ui['section_titles'].get('market_scan', 'MARKET INTELLIGENCE')}")
+        hr("-")
+        if self.state.market_angle:
+            print(f"  Verdict: {self.state.market_verdict}")
+            print(f"  {ms['angle_label']}: {self.state.market_angle}")
+        else:
+            print(f"  Verdict: {self.state.market_verdict}")
         print()
 
         hr("-")
