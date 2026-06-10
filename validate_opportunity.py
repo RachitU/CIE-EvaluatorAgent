@@ -16,7 +16,6 @@ AGENT 1 — Opportunity Evaluation Agent
   Phase 1a: TIPSC Triage (first-pass: Strong / Weak / Unclear)
   Phase 1b: TIPSC Deep-Dive (one criterion at a time)
   Phase 1c: Need Validation
-  Phase 1d: COP (inferred organically throughout)
 
 AGENT 2 — Idea Evaluation Agent
   Phase 2a: PSEA Evaluation (initial pass)
@@ -25,7 +24,7 @@ AGENT 2 — Idea Evaluation Agent
 
 Workflow:
   Problem Input
-    → Opportunity Evaluation (TIPSC → Need → COP)
+    → Opportunity Evaluation (TIPSC → Need )
     → [APPROVED] → Solution Input
     → Idea Evaluation (PSEA + Feasibility)
     → [READY_FOR_DFV]

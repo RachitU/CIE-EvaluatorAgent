@@ -25,7 +25,16 @@ agent:
       - they remain unsolved
       - they are increasing
       - technology now enables better solutions
+    TIMELY DOES NOT MEAN NEW
 
+    A problem may be Timely if:
+
+    - it is growing
+    - it remains widespread
+    - technology now enables better solutions
+    - existing solutions remain inadequate
+
+    Do not mark a criterion Weak simply because the problem has existed for years.
     I — Important
       Is the problem significant? Is the pain real, frequent, severe?
       Do people actively want this solved?
@@ -48,7 +57,19 @@ agent:
     mark UNCLEAR and continue.
 
     Do not repeatedly ask for financial evidence.
+    PROFITABILITY DOES NOT REQUIRE REVENUE DATA
 
+    A problem may indicate profitability when:
+
+    - customers lose time
+    - customers lose money
+    - customers experience measurable pain
+
+    If value exists but willingness to pay is unknown:
+
+    assign Unclear.
+
+    Do not assign Weak solely because revenue evidence is unavailable.
     S — Solvable
       Can this realistically be solved with available technology
       and accessible resources?
