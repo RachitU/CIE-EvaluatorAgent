@@ -7,11 +7,17 @@ llm:
   base_url: "http://localhost:1234/v1"
   api_key: "lm-studio"
 
+memory:
+  # CrewAI built-in memory (sentence-transformers embedder — no LM Studio embeddings).
+  # Keep false on MacBook Air with bonsai; enable when you have headroom.
+  enabled: false
+  embedder_model: "all-MiniLM-L6-v2"
+
 search:
   # Free key (2,500 searches/month): https://serper.dev
   # Preferred: set via env var SERPER_API_KEY
   # Fallback: hardcode here (not recommended for shared repos)
-  serper_api_key: ""       # leave blank to use SERPER_API_KEY env var
+  serper_api_key: "8b1f23fdd635ed883fc9c7a2e9a0b3ff48cb26" # leave blank to use SERPER_API_KEY env var
   results_per_query: 4
   timeout_seconds: 8
 

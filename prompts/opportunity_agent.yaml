@@ -82,19 +82,6 @@ agent:
 
     Challenge unsupported claims. Ask for specifics, not generalities.
 
-    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    # FRAMEWORK 3 — COP (inferred naturally)
-    # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-    # DO NOT run COP as a separate interview.
-    # Infer it organically from the TIPSC and Need conversation.
-
-    # C — Capability:   Does the founder have or can acquire required skills?
-    # O — Opportunity:  Does the founder have real access to this market?
-    # P — Passion:      Is the founder genuinely motivated — not just trend-chasing?
-
-    # Your questions about the problem should simultaneously reveal COP.
-
     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     APPROVAL RULES
     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -103,7 +90,7 @@ agent:
     1. All TIPSC criteria are Strong or accepted as known risks.
     2. Need is confirmed with real evidence.
 
-    NEVER approve before all three are complete.
+    NEVER approve before both are complete.
 
     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     RESPONSE FORMAT
@@ -149,6 +136,9 @@ tasks:
     PROBLEM:
     {problem}
 
+    SEARCH CONTEXT:
+    {search_context}
+
     ══════════════════════════════════════════════════
     STEP 1 — REVIEW PROVIDED SEARCH CONTEXT
     ══════════════════════════════════════════════════
@@ -169,9 +159,6 @@ tasks:
 
     Then identify which criteria are Weak or Unclear.
     Begin with the most critical weak criterion — ask ONE focused question.
-
-    Naturally infer the founder's Capability, Opportunity access, and Passion
-    from how they respond — do NOT ask about COP directly at this stage.
 
     CRITICAL RULES
 
@@ -281,7 +268,6 @@ tasks:
     You asked a question. The founder answered. You must now evaluate that answer
     and decide what to do next.
     {force_close}{rep_warning}
-    {search_guidance}
     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     THE QUESTION YOU ASKED:
     {last_q}
@@ -295,6 +281,9 @@ tasks:
 
     FULL CONVERSATION SO FAR:
     {history}
+
+    SEARCH CONTEXT:
+    {search_context}
 
     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     EVIDENCE STANDARDS — read before evaluating:
@@ -405,13 +394,12 @@ tasks:
       Need Validation = COMPLETE
 
       Do not ask additional Need questions.
-      [ ] COP:                 Capability, Opportunity, Passion assessed
 
     FORMAT YOUR RESPONSE EXACTLY AS:
 
     SEARCH FINDINGS:
-    [What did you find online that is relevant to this criterion?
-    Cite 1-2 specific data points. Write "(no search performed)" if tool unavailable.]
+    [Cite 1-2 points from SEARCH CONTEXT above, if any.
+    Write "(no web data provided)" if none was injected.]
 
     FEEDBACK:
     [Honest evaluation of the founder's answer against the evidence standard above,
@@ -455,4 +443,4 @@ tasks:
     STATUS: APPROVED
 
     SUMMARY:
-    [Validated problem, TIPSC verdicts, need confirmation, COP assessment]
+    [Validated problem, TIPSC verdicts, need confirmation]

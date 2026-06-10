@@ -3,6 +3,7 @@ crewai-tools>=0.15.0
 pydantic>=2.0.0
 requests>=2.31.0
 pyyaml>=6.0.1
+litellm>=1.40.0
 
 sentence-transformers==2.7.0
 transformers>=4.41.0,<5

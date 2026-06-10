@@ -111,16 +111,8 @@ tasks:
     {search_context}
 
     ══════════════════════════════════════════════════
-    STEP 1 — RESEARCH FIRST (use your search tool)
+    STEP 1 — REVIEW PROVIDED SEARCH CONTEXT
     ══════════════════════════════════════════════════
-    Before evaluating any PSEA dimension, search the web to ground your
-    assessment in real competitive and market data.
-
-    Run these searches (adapt queries to the specific solution above):
-      1. "[problem area] existing apps OR platforms OR solutions"
-      2. "[solution type] competitors OR alternatives"
-      3. "[service type] legal requirements OR privacy regulations"
-      4. "[target market] size OR customer behaviour statistics"
     Use the supplied SEARCH CONTEXT as evidence.
 
     Do not invent competitors.
@@ -219,8 +211,7 @@ tasks:
   refinement: |
     You are a product strategist evaluating a startup solution.
     You asked a question. The founder answered. Evaluate the answer and decide next steps.
-    {rep_warning}
-    {search_guidance}
+    {force_close}{rep_warning}
     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     THE QUESTION YOU ASKED:
     {last_q}
@@ -240,8 +231,8 @@ tasks:
     YOUR TASK — follow these steps in order:
     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    STEP 1 — Search (if tool available), then evaluate the founder's answer.
-      - What did search reveal about this specific PSEA dimension?
+    STEP 1 — Use SEARCH CONTEXT below (if any), then evaluate the founder's answer.
+      - What does the injected web data say about this PSEA dimension?
       - What did the founder actually say?
       - Did it resolve the issue, especially in light of what search found?
       - If not, what specific gap remains?
@@ -293,8 +284,8 @@ tasks:
     FORMAT YOUR RESPONSE EXACTLY AS:
 
     SEARCH FINDINGS:
-    [1-2 specific things you found online relevant to this PSEA dimension.
-    Write "(no search performed)" if the tool is unavailable.]
+    [1-2 points from SEARCH CONTEXT above, if any.
+    Write "(no web data provided)" if none was injected.]
 
     FEEDBACK:
     [Honest evaluation incorporating both what the founder said and what search found.

@@ -1,40 +1,31 @@
 """
-Entrepreneurial Opportunity Validation System — CrewAI Memory Variant
-=====================================================================
+Entrepreneurial Opportunity Validation System
+=============================================
 
-  memory=True is passed to every Crew instance in run_agent().
-
-This enables CrewAI's built-in memory stack:
-  - Short-term memory  : RAG over recent interactions (ChromaDB)
-  - Long-term memory   : cross-run persistence (SQLite)
-  - Entity memory      : tracks key nouns/concepts across turns
-
-Requires: pip install sentence-transformers
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-AGENT 1 — Opportunity Evaluation Agent
-  Phase 1a: TIPSC Triage (first-pass: Strong / Weak / Unclear)
-  Phase 1b: TIPSC Deep-Dive (one criterion at a time)
-  Phase 1c: Need Validation
-  Phase 1d: COP (inferred organically throughout)
-
-AGENT 2 — Idea Evaluation Agent
-  Phase 2a: PSEA Evaluation (initial pass)
-  Phase 2b: Refinement Loop (until READY_FOR_DFV)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+A two-agent AI system that validates entrepreneurial opportunities
+before the founder commits to building a solution.
 
 Workflow:
   Problem Input
-    → Opportunity Evaluation (TIPSC → Need → COP)
+    → Opportunity Evaluation (TIPSC → Need)
     → [APPROVED] → Solution Input
     → Idea Evaluation (PSEA + Feasibility)
     → [READY_FOR_DFV]
 """
 
-from email.mime import text
 import os
 import sys
+import logging
+import warnings
+from typing import Optional, List, Dict
 from pathlib import Path
+
+# Completely disable CrewAI Telemetry and OpenTelemetry tracing
+# This prevents the script from hanging on Ctrl+C trying to reach telemetry.crewai.com
+os.environ["CREWAI_TRACING_ENABLED"] = "0"
+os.environ["OTEL_SDK_DISABLED"] = "true"
+os.environ["CREWAI_TELEMETRY_OPT_OUT"] = "true"
+
 
 import requests
 import yaml
@@ -42,16 +33,12 @@ from datetime import datetime
 from typing import List
 from pydantic import BaseModel
 from crewai import Agent, Task, Crew, Process, LLM
-from crewai.flow.flow import Flow, listen, start
-from crewai_tools import SerperDevTool
+from crewai.flow.flow import Flow, listen, start, router
 
 
 # ══════════════════════════════════════════════════════════════
 # LOAD CONFIGURATION & PROMPTS
 # ══════════════════════════════════════════════════════════════
-os.environ["OPENAI_API_KEY"] = "lm-studio"
-os.environ["OPENAI_BASE_URL"] = "http://localhost:1234/v1"
-os.environ["SERPER_API_KEY"] = "8b1f23fdd635ed883fc9c7a2e9a0b3ff48cb2650"
 
 BASE_DIR = Path(__file__).parent
 
@@ -67,13 +54,15 @@ opp_p    = _load_yaml("prompts/opportunity_agent.yaml")
 idea_p   = _load_yaml("prompts/idea_agent.yaml")
 ui       = _load_yaml("prompts/ui_strings.yaml")
 
-# ── Convenience accessors ──────────────────────────────────────
+# ── Convenience accessors ──
 _val     = cfg["validation"]
-_conv    = cfg["conversation"]
 _search  = cfg["search"]
 _display = cfg["display"]
+_memory  = cfg.get("memory", {})
+_conv    = cfg.get("conversation", {})
 
 MAX_TURNS_PER_CRITERION = _val["max_turns_per_criterion"]
+MAX_HISTORY_TURNS       = _conv.get("max_history_turns", 2)
 W                       = _display["console_width"]
 
 
@@ -88,15 +77,12 @@ llm = LLM(
     api_key=llm_cfg["api_key"],
 )
 
-agent_tools = [SerperDevTool()]
+# CrewAI / chromadb may read these when memory is enabled.
+os.environ.setdefault("OPENAI_API_KEY", llm_cfg["api_key"])
+os.environ.setdefault("OPENAI_BASE_URL", llm_cfg["base_url"])
 
-# Serper web search — Python-direct (no agent tool calls).
-# Search results are pre-fetched in Python and injected as context
-# into each task description.  Small LLMs cannot reliably trigger
-# function/tool calls; pre-fetching bypasses that entirely.
-#
-# Free key (2,500 searches/month): https://serper.dev
-# Set before running:  export SERPER_API_KEY=your_key_here
+# Web search is pre-fetched in Python — agents do not call tools.
+agent_tools = []
 _serper_key = (
     os.environ.get("SERPER_API_KEY")
     or _search.get("serper_api_key", "")
@@ -129,9 +115,11 @@ class ValidationState(BaseModel):
     current_criterion: str  = ""          # Letter currently under investigation
 
     # Idea evaluation state
-    idea_status: str = "PENDING"          # PENDING → IN_PROGRESS → READY_FOR_DFV
-    idea_report: str = ""
-    idea_last_q: str = ""                 # Tracks last question to detect repetition
+    idea_status:       str  = "PENDING"   # PENDING → IN_PROGRESS → READY_FOR_DFV
+    idea_report:       str  = ""
+    idea_last_q:       str  = ""          # Tracks last question to detect repetition
+    idea_issue_turns:  dict = {}          # {"P": 2, "S": 1, ...} turns spent per PSEA issue
+    current_idea_issue: str = ""          # Letter currently under investigation
 
 
 # ══════════════════════════════════════════════════════════════
@@ -153,55 +141,37 @@ def section(title: str) -> None:
     print()
 
 
-def extract_displayed_question(text: str) -> str:
+def extract_question(text: str, for_display: bool = False) -> str:
     """
-    Pull the question the agent is asking out of any response format.
+    Extract the QUESTION: value from an agent response.
 
-    The model (especially small LLMs) does not always follow the structured
-    template. This function tries multiple fallback strategies so there is
-    always something concrete shown to the user.
-
-    Strategy 1 — Explicit QUESTION: section (expected format).
-    Strategy 2 — Last line in the response that ends with '?'.
-    Strategy 3 — Substring around the last '?' anywhere in the text.
-    Strategy 4 — Generic fallback.
+    When for_display=True, truncates at coaching markers and falls back
+    to the last '?' line for cleaner UI display.
     """
-    # Strategy 1: look for the QUESTION: marker we ask the model to include
-    if "QUESTION:" in text.upper():
-        idx   = text.upper().rfind("QUESTION:")   # rfind → take the last one
-        chunk = text[idx + len("QUESTION:"):].strip()
-        line  = chunk.split("\n")[0].strip()
-        if len(line) > 5:
-            return line
-
-   # ONLY extract from QUESTION block
     if "QUESTION:" in text.upper():
         idx = text.upper().rfind("QUESTION:")
         chunk = text[idx + len("QUESTION:"):].strip()
 
-        stop_markers = [
-        "GOOD ANSWER EXAMPLE:",
-        "WHAT HELPS:",
-        "VERDICT:",
-        "STATUS:"
-    ]
+        if for_display:
+            end = len(chunk)
+            for marker in ("GOOD ANSWER EXAMPLE:", "WHAT HELPS:", "VERDICT:", "STATUS:"):
+                pos = chunk.upper().find(marker)
+                if pos != -1:
+                    end = min(end, pos)
+            q = chunk[:end].strip()
+            if len(q) > 5:
+                return q
+        else:
+            return chunk.split("\n")[0].strip()
 
-        end = len(chunk)
+    if for_display:
+        for line in reversed(text.strip().split("\n")):
+            line = line.strip()
+            if line.endswith("?") and len(line) > 10:
+                return line
+        return ui["agent_display"]["fallback_question"]
 
-        for marker in stop_markers:
-            pos = chunk.upper().find(marker)
-            if pos != -1:
-                end = min(end, pos)
-
-        q = chunk[:end].strip()
-
-        if q:
-            return q
-
-    return ui["agent_display"]["fallback_question"]
-
-    # Strategy 4: generic fallback from UI strings
-    return ui["agent_display"]["fallback_question"]
+    return text.strip()[:200]
 
 
 def _wrap(text: str, width: int = W - 4) -> List[str]:
@@ -226,7 +196,7 @@ def agent_says(text: str) -> None:
 
     Works regardless of whether the model followed the structured template.
     """
-    question = extract_displayed_question(text)
+    question = extract_question(text, for_display=True)
     label    = ui["agent_display"]["asking_label"]
 
     # Full agent response
@@ -247,56 +217,42 @@ def agent_says(text: str) -> None:
 
 
 def ask(prompt: str = "") -> str:
-    """Prompt the user for input and return the trimmed response."""
+    """Prompt the user for input. Typing 'quit' or 'exit' ends the session."""
     if prompt:
         print(f"\n  {prompt}")
     response = input("\n  > ").strip()
+    if response.lower() in ("quit", "exit", "q"):
+        print("\n  Session ended by user.\n")
+        sys.exit(0)
     print()
     return response
 
 
 def format_history(history: List[dict]) -> str:
-    """
-    Build a minimal context block for the agent — NOT a full transcript.
-
-    Instead of dumping every turn, we extract only:
-      - Resolved criterion verdicts (scraped from agent responses)
-      - The last N Q&A pairs (enough for the model to stay oriented)
-
-    This keeps the prompt small for smaller LLMs while preserving
-    the state the agent actually needs to make a good decision.
-    """
+    """Build a minimal context block: resolved verdicts + last N Q&A pairs."""
     if not history:
         return "(No prior conversation.)"
 
-    # ── 1. Scrape resolved verdicts from all agent turns ──────
+    # 1. Scrape resolved verdicts from all agent turns
     verdict_lines = []
     for turn in history:
         if turn["role"] != "agent":
             continue
-        text = turn["content"]
-        # Look for lines like "T — Timely: Strong — ..."
-        for line in text.split("\n"):
+        for line in turn["content"].split("\n"):
             l = line.strip()
             if any(l.startswith(f"{c} —") or l.startswith(f"{c}:") for c in "TIPSCN"):
                 if any(w in l.upper() for w in ("STRONG", "WEAK", "ACCEPTED", "UNCLEAR", "CONFIRMED", "RESOLVED")):
                     verdict_lines.append(f"  {l}")
 
-    # ── 2. Keep only the last 2 Q&A pairs ─────────────────────
+    # 2. Keep only the last N Q&A pairs (configurable via settings.yaml)
     qa_pairs = []
     i = len(history) - 1
-    while i >= 0 and len(qa_pairs) < 2:
+    while i >= 0 and len(qa_pairs) < MAX_HISTORY_TURNS:
         if history[i]["role"] == "user":
             answer = history[i]["content"]
-            # Find the question that preceded it
             for j in range(i - 1, -1, -1):
                 if history[j]["role"] == "agent":
-                    q_text = history[j]["content"]
-                    if "QUESTION:" in q_text.upper():
-                        q_start = q_text.upper().find("QUESTION:")
-                        question = q_text[q_start + len("QUESTION:"):].strip().split("\n")[0].strip()
-                    else:
-                        question = q_text.strip()[:200]
+                    question = extract_question(history[j]["content"])
                     qa_pairs.insert(0, f"Q: {question}\nA: {answer}")
                     i = j - 1
                     break
@@ -305,10 +261,10 @@ def format_history(history: List[dict]) -> str:
         else:
             i -= 1
 
-    # ── 3. Assemble ───────────────────────────────────────────
+    # 3. Assemble
     parts = []
     if verdict_lines:
-        seen = list(dict.fromkeys(verdict_lines))   # deduplicate, preserve order
+        seen = list(dict.fromkeys(verdict_lines))
         parts.append("RESOLVED SO FAR:\n" + "\n".join(seen))
     if qa_pairs:
         parts.append("RECENT EXCHANGES:\n" + "\n\n".join(qa_pairs))
@@ -316,33 +272,39 @@ def format_history(history: List[dict]) -> str:
     return "\n\n".join(parts) if parts else "(No prior conversation.)"
 
 
+import re
+
+def _strip_react_noise(text: str) -> str:
+    """Remove ReAct OBSERVATION: traces and <think> tags from reasoning models."""
+    if "OBSERVATION:" in text:
+        text = text.split("OBSERVATION:")[0]
+    
+    # Strip <think>...</think> blocks from reasoning models
+    text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
+    
+    return text.strip()
+
+
 def run_agent(task: Task, agent: Agent) -> str:
-    """
-    Run a single-agent crew and return a clean plain-text string.
-
-    memory=True enables CrewAI's built-in memory stack:
-      - Short-term: RAG over interactions within this session (ChromaDB)
-      - Long-term:  SQLite persistence across runs
-      - Entity:     tracks key concepts/nouns mentioned
-
-    sentence-transformers is used as the embedder so no OpenAI key is required.
-    Install with: pip install sentence-transformers
-    """
-    crew = Crew(
-        agents=[agent],
-        tasks=[task],
-        process=Process.sequential,
-        verbose=False,
-        memory=False,
-        embedder={
+    """Run a single-agent crew and return a clean plain-text string."""
+    memory_on = _memory.get("enabled", False)
+    crew_kwargs: dict = {
+        "agents": [agent],
+        "tasks": [task],
+        "process": Process.sequential,
+        "verbose": False,
+        "memory": memory_on,
+    }
+    if memory_on:
+        crew_kwargs["embedder"] = {
             "provider": "sentence-transformer",
             "config": {
-                "model": "all-MiniLM-L6-v2",
-            }
-        },
-    )
+                "model": _memory.get("embedder_model", "all-MiniLM-L6-v2"),
+            },
+        }
+    crew = Crew(**crew_kwargs)
     raw = str(crew.kickoff())
-    return clean_agent_output(raw)
+    return clean_agent_output(_strip_react_noise(raw))
 
 
 # Section headers that always mark the START of the agent's formatted response.
@@ -397,8 +359,6 @@ def last_exchange(history: List[dict]) -> tuple[str, str]:
     """
     Extract the most recent (agent_question, user_answer) pair from history.
     Returns ("(none)", "(none)") if there isn't a complete pair yet.
-    Small LLMs forget context easily — passing these explicitly and prominently
-    is more reliable than relying on them reading through the full transcript.
     """
     last_q = "(none)"
     last_a = "(none)"
@@ -406,22 +366,9 @@ def last_exchange(history: List[dict]) -> tuple[str, str]:
         if turn["role"] == "user" and last_a == "(none)":
             last_a = turn["content"]
         elif turn["role"] == "agent" and last_q == "(none)" and last_a != "(none)":
-            content = turn["content"]
-            if "QUESTION:" in content.upper():
-                q_start = content.upper().find("QUESTION:")
-                last_q  = content[q_start + len("QUESTION:"):].strip().split("\n")[0].strip()
-            else:
-                last_q = content
+            last_q = extract_question(turn["content"])
             break
     return last_q, last_a
-
-
-def extract_question(text: str) -> str:
-    """Pull the QUESTION: value out of a response for repetition tracking."""
-    if "QUESTION:" in text.upper():
-        idx = text.upper().find("QUESTION:")
-        return text[idx + len("QUESTION:"):].strip().split("\n")[0].strip()
-    return text.strip()[:200]   # fallback: first 200 chars
 
 
 def repetition_warning(last_q: str, current_q: str) -> str:
@@ -438,10 +385,7 @@ def repetition_warning(last_q: str, current_q: str) -> str:
         return ""
     overlap = len(lq_words & cq_words) / len(lq_words)
     if overlap > 0.7:
-        return ui["prompts"].get(
-            "repetition_warning",
-            ui["repetition_warning"],
-        )
+        return ui["repetition_warning"]
     return ""
 
 
@@ -471,26 +415,14 @@ def parse_criterion(text: str) -> str:
     return ""
 
 
-# ── Criterion metadata ─────────────────────────────────────────
 _CRITERION_NAMES = {
     "T": "Timely", "I": "Important", "P": "Profitable",
     "S": "Solvable", "C": "Contextual", "N": "Need Validation",
 }
 
-_CRITERION_SEARCH_GUIDANCE = {
-    "T": "Search for market readiness and adoption trends.",
-    "I": "Search for evidence of user pain points.",
-    "P": "Search for monetization models and revenue opportunities.",
-    "S": "Search for technical feasibility and available technology.",
-    "C": "Search for regulations and contextual constraints.",
-    "N": "Search for evidence that the need is real.",
-}
-
-_PSEA_SEARCH_GUIDANCE = {
-    "P": "Search for competitors and problem-solution fit evidence.",
-    "S": "Search for simpler alternatives.",
-    "E": "Search for legal, privacy, and ethical requirements.",
-    "A": "Search for market assumptions and adoption data.",
+_PSEA_ISSUE_NAMES = {
+    "P": "Problem-Solution Fit", "S": "Simplicity",
+    "E": "Ethics", "A": "Assumptions",
 }
 
 
@@ -671,10 +603,17 @@ def psea_search_context(problem: str, solution: str, issue: str = "") -> str:
 # AGENTS
 # ══════════════════════════════════════════════════════════════
 
+SKILLS_DIR = str(BASE_DIR / "skills")
+
 opportunity_agent = Agent(
     role=opp_p["agent"]["role"],
     goal=opp_p["agent"]["goal"],
     backstory=opp_p["agent"]["backstory"],
+    skills=[
+        f"{SKILLS_DIR}/tipsc-evaluation",
+        f"{SKILLS_DIR}/need-validation",
+        f"{SKILLS_DIR}/question-quality",
+    ],
     verbose=False,
     tools=agent_tools,
     llm=llm,
@@ -684,6 +623,10 @@ idea_agent = Agent(
     role=idea_p["agent"]["role"],
     goal=idea_p["agent"]["goal"],
     backstory=idea_p["agent"]["backstory"],
+    skills=[
+        f"{SKILLS_DIR}/psea-evaluation",
+        f"{SKILLS_DIR}/question-quality",
+    ],
     verbose=False,
     tools=agent_tools,
     llm=llm,
@@ -717,7 +660,10 @@ class ValidationFlow(Flow[ValidationState]):
         section(ui["phases"]["opportunity_header"])
         print(ui["phases"]["opportunity_running"])
 
-        description = opp_p["tasks"]["triage"].format(problem=problem)
+        description = opp_p["tasks"]["triage"].format(
+            problem=problem,
+            search_context=tipsc_search_context(problem),
+        )
 
         triage_task = Task(
             description=description,
@@ -730,6 +676,7 @@ class ValidationFlow(Flow[ValidationState]):
         self.state.opp_history.append({"role": "agent", "content": result})
         self.state.opp_report  = result
         self.state.opp_status  = "IN_PROGRESS"
+        self.state.opp_last_q  = extract_question(result)
 
         return result
 
@@ -768,19 +715,18 @@ class ValidationFlow(Flow[ValidationState]):
             force_close    = force_close_instruction(
                                  self.state.current_criterion, turns_on_current
                              )
-            srch_guidance  = _CRITERION_SEARCH_GUIDANCE.get(
-                                 self.state.current_criterion, ""
-                             )
             history_text   = format_history(self.state.opp_history)
 
             description = opp_p["tasks"]["followup"].format(
-                force_close    = force_close,
-                rep_warning    = rep_warning,
-                search_guidance = srch_guidance,
-                last_q         = last_q,
-                last_a         = last_a,
-                problem        = self.state.problem,
-                history        = history_text,
+                force_close=force_close,
+                rep_warning=rep_warning,
+                last_q=last_q,
+                last_a=last_a,
+                problem=self.state.problem,
+                history=history_text,
+                search_context=criterion_search_context(
+                    self.state.current_criterion, self.state.problem
+                ),
             )
 
             followup_task = Task(
@@ -790,10 +736,6 @@ class ValidationFlow(Flow[ValidationState]):
             )
 
             report = run_agent(followup_task, opportunity_agent)
-            if "OBSERVATION:" in report:
-                report = report.split("OBSERVATION:")[0]
-            if "FINAL ANSWER:" in report:
-                report = report.split("FINAL ANSWER:")[-1]
             self.state.opp_last_q = extract_question(report)
             self.state.opp_history.append({"role": "agent", "content": report})
             self.state.opp_report = report
@@ -821,14 +763,10 @@ class ValidationFlow(Flow[ValidationState]):
         print(ui["phases"]["idea_running"])
 
         description = idea_p["tasks"]["initial_eval"].format(
-    problem=self.state.problem,
-    solution=solution,
-    search_context=psea_search_context(
-        self.state.problem,
-        solution,
-        ""
-    ),
-)
+            problem=self.state.problem,
+            solution=solution,
+            search_context=psea_search_context(self.state.problem, solution, ""),
+        )
         eval_task = Task(
             description=description,
             expected_output="Search findings, PSEA evaluation with verdict.",
@@ -840,6 +778,7 @@ class ValidationFlow(Flow[ValidationState]):
         self.state.idea_history.append({"role": "agent", "content": result})
         self.state.idea_report = result
         self.state.idea_status = "IN_PROGRESS"
+        self.state.idea_last_q = extract_question(result)
 
         return result
 
@@ -857,14 +796,7 @@ class ValidationFlow(Flow[ValidationState]):
 
             agent_says(report)
 
-            answer = ask(ui["prompts"]["response_input"])
-            self.state.idea_history.append({"role": "user", "content": answer})
-
-            last_q, last_a = last_exchange(self.state.idea_history)
-            rep_warning    = repetition_warning(self.state.idea_last_q, last_q)
-            history_text   = format_history(self.state.idea_history)
-
-            # Parse which PSEA criterion is active for targeted search guidance
+            # Parse and track which PSEA issue is active
             active_issue = ""
             if "ISSUE IN FOCUS:" in report.upper():
                 idx  = report.upper().find("ISSUE IN FOCUS:")
@@ -873,16 +805,36 @@ class ValidationFlow(Flow[ValidationState]):
                     if ch in "PSEA":
                         active_issue = ch
                         break
-            psea_search = _PSEA_SEARCH_GUIDANCE.get(active_issue, "")
+            if active_issue:
+                self.state.current_idea_issue = active_issue
+                self.state.idea_issue_turns[active_issue] = (
+                    self.state.idea_issue_turns.get(active_issue, 0) + 1
+                )
+            turns_on_current = self.state.idea_issue_turns.get(
+                self.state.current_idea_issue, 0
+            )
+
+            answer = ask(ui["prompts"]["response_input"])
+            self.state.idea_history.append({"role": "user", "content": answer})
+
+            last_q, last_a = last_exchange(self.state.idea_history)
+            rep_warning    = repetition_warning(self.state.idea_last_q, last_q)
+            force_close    = force_close_instruction(
+                                 self.state.current_idea_issue, turns_on_current
+                             )
+            history_text   = format_history(self.state.idea_history)
 
             description = idea_p["tasks"]["refinement"].format(
-                rep_warning    = rep_warning,
-                search_guidance = psea_search,
-                last_q         = last_q,
-                last_a         = last_a,
-                problem        = self.state.problem,
-                solution       = self.state.solution,
-                history        = history_text,
+                force_close=force_close,
+                rep_warning=rep_warning,
+                last_q=last_q,
+                last_a=last_a,
+                problem=self.state.problem,
+                solution=self.state.solution,
+                history=history_text,
+                search_context=psea_search_context(
+                    self.state.problem, self.state.solution, active_issue
+                ),
             )
 
             refinement_task = Task(
