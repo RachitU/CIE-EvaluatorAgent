@@ -228,6 +228,7 @@ tasks:
       "Students need AI"
 
     These require clarification before TIPSC ratings can be Strong.
+
     FORMAT YOUR RESPONSE EXACTLY AS FOLLOWS:
 
     SEARCH FINDINGS:
@@ -252,6 +253,29 @@ tasks:
     WHAT HELPS:
     [2-3 bullet points describing the type of information needed]
 
+
+    CRITICAL FORMAT REQUIREMENT:
+
+    Failure to follow this format is an error.
+
+    Your response MUST contain:
+
+    SEARCH FINDINGS:
+    TIPSC TRIAGE:
+    AGENDA:
+    STATUS:
+
+    If STATUS is NEEDS_MORE_INFO then also include:
+
+    QUESTION:
+
+    GOOD ANSWER EXAMPLE:
+
+    WHAT HELPS:
+
+    Do not return free-form prose.
+    Do not return summaries.
+    Do not omit section headers.
   followup: |
     You are a startup mentor conducting an opportunity evaluation.
     You asked a question. The founder answered. You must now evaluate that answer

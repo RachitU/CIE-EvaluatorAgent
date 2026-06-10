@@ -31,6 +31,7 @@ Workflow:
     → [READY_FOR_DFV]
 """
 
+from email.mime import text
 import os
 import sys
 from pathlib import Path
@@ -50,7 +51,7 @@ from crewai_tools import SerperDevTool
 # ══════════════════════════════════════════════════════════════
 os.environ["OPENAI_API_KEY"] = "lm-studio"
 os.environ["OPENAI_BASE_URL"] = "http://localhost:1234/v1"
-os.environ["SERPER_API_KEY"] = "your_actual_serper_api_key_here"
+os.environ["SERPER_API_KEY"] = "8b1f23fdd635ed883fc9c7a2e9a0b3ff48cb2650"
 
 BASE_DIR = Path(__file__).parent
 
@@ -173,20 +174,31 @@ def extract_displayed_question(text: str) -> str:
         if len(line) > 5:
             return line
 
-    # Strategy 2: last non-empty line that ends with a '?'
-    for line in reversed(text.strip().split("\n")):
-        line = line.strip()
-        if line.endswith("?") and len(line) > 10:
-            return line
+   # ONLY extract from QUESTION block
+    if "QUESTION:" in text.upper():
+        idx = text.upper().rfind("QUESTION:")
+        chunk = text[idx + len("QUESTION:"):].strip()
 
-    # Strategy 3: substring from last sentence boundary to last '?'
-    if "?" in text:
-        last_q  = text.rfind("?")
-        before  = text[:last_q]
-        start   = max(before.rfind("."), before.rfind(":"), before.rfind("\n"))
-        fragment = text[start + 1: last_q + 1].strip()
-        if len(fragment) > 10:
-            return fragment
+        stop_markers = [
+        "GOOD ANSWER EXAMPLE:",
+        "WHAT HELPS:",
+        "VERDICT:",
+        "STATUS:"
+    ]
+
+        end = len(chunk)
+
+        for marker in stop_markers:
+            pos = chunk.upper().find(marker)
+            if pos != -1:
+                end = min(end, pos)
+
+        q = chunk[:end].strip()
+
+        if q:
+            return q
+
+    return ui["agent_display"]["fallback_question"]
 
     # Strategy 4: generic fallback from UI strings
     return ui["agent_display"]["fallback_question"]
@@ -585,13 +597,36 @@ def criterion_search_context(criterion: str, problem: str) -> str:
     yr    = datetime.now().year
     short = problem[:55].rstrip()
     queries_map = {
-        "T": [f"{short} market readiness {yr}", f"{short} technology adoption rate"],
-        "I": [f"{short} user pain points OR complaints", "students missing college updates notifications problem"],
-        "P": [f"{short} business model monetization examples", f"EdTech student platform revenue model {yr}"],
-        "S": [f"{short} technical feasibility build", f"{short} API OR integration tools available"],
-        "C": [f"{short} data privacy regulations {yr}", "student app compliance requirements"],
-        "N": [f"{short} unmet need evidence", f"{short} why existing solutions fail students"],
-    }
+    "T": [
+        f"{short} market trends {yr}",
+        f"{short} growing problem evidence"
+    ],
+
+    "I": [
+        f"{short} user pain points",
+        f"{short} consequences impact"
+    ],
+
+    "P": [
+        f"{short} business opportunity",
+        f"{short} willingness to pay"
+    ],
+
+    "S": [
+        f"{short} technical feasibility",
+        f"{short} existing technologies available"
+    ],
+
+    "C": [
+        f"{short} regulations compliance",
+        f"{short} industry context"
+    ],
+
+    "N": [
+        f"{short} unmet need evidence",
+        f"{short} existing solutions limitations"
+    ],
+}
     queries = queries_map.get(criterion, [f"{short} market opportunity {yr}"])
     return _fetch_web_context(queries, label=f"Criterion: {_CRITERION_NAMES.get(criterion, criterion)}")
 
@@ -755,6 +790,10 @@ class ValidationFlow(Flow[ValidationState]):
             )
 
             report = run_agent(followup_task, opportunity_agent)
+            if "OBSERVATION:" in report:
+                report = report.split("OBSERVATION:")[0]
+            if "FINAL ANSWER:" in report:
+                report = report.split("FINAL ANSWER:")[-1]
             self.state.opp_last_q = extract_question(report)
             self.state.opp_history.append({"role": "agent", "content": report})
             self.state.opp_report = report
