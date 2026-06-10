@@ -50,6 +50,7 @@ from crewai_tools import SerperDevTool
 # ══════════════════════════════════════════════════════════════
 os.environ["OPENAI_API_KEY"] = "lm-studio"
 os.environ["OPENAI_BASE_URL"] = "http://localhost:1234/v1"
+os.environ["SERPER_API_KEY"] = "your_actual_serper_api_key_here"
 
 BASE_DIR = Path(__file__).parent
 
