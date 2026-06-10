@@ -10,7 +10,7 @@ startup:
     PHASE 1 — Opportunity Evaluation
       TIPSC  (Timely · Important · Profitable · Solvable · Contextual)
       Need Validation
-      COP    (Capability · Opportunity · Passion)
+     
 
     PHASE 2 — Idea Evaluation
       PSEA   (Problem-Solution Fit · Simplicity · Ethics · Assumptions)
@@ -55,26 +55,42 @@ report_labels:
   idea:        "IDEA EVALUATION"
 
 force_close_template: |
-  ⚠  MANDATORY OVERRIDE — CRITERION MUST CLOSE NOW
+  ⚠ MANDATORY OVERRIDE — CRITERION MUST CLOSE NOW
+
   You have spent {turns} turns investigating {name} ({criterion}).
-  The founder has provided reasonable estimates and examples.
-  At this stage of validation, reasonable evidence is sufficient.
-  You are NOT expected to have perfect data.
+
+  The founder has already provided reasonable evidence.
+
+  Perfect certainty is NOT required at this stage.
 
   YOU MUST:
-    1. Accept what the founder has provided as sufficient for this stage.
-    2. Assign a verdict of Strong, Weak, or Accepted Risk to {name}.
-    3. Close {name} and move to the NEXT unresolved criterion.
-    4. Do NOT ask another question about {name}.
 
-  Continuing to probe {name} is a validation error. Move on.
+    1. Accept the founder's evidence as sufficient.
+    2. Assign:
+       - Strong
+       - Weak
+       - Unclear
+       - Accepted Risk
+    3. Close this criterion immediately.
+    4. Move to the next unresolved criterion.
+    5. Do NOT ask another question about this criterion.
+
+  Continuing to investigate this criterion is a validation error.
 
 repetition_warning: |
-  ⚠ WARNING: Your previous question was nearly identical to the one before it.
-  The founder's answer was not sufficient — but you must ask a DIFFERENT,
-  more targeted question. Do not repeat yourself. Identify the SPECIFIC GAP
-  in the answer and probe that gap directly.
+  ⚠ WARNING: You are repeating yourself.
 
+  Do NOT ask another variation of the same question.
+
+  If the founder has already provided a reasonable answer:
+
+    1. Accept the answer.
+    2. Assign Strong, Weak, Unclear, or Accepted Risk.
+    3. Close the criterion.
+    4. Move to the next unresolved criterion.
+
+  Repeated questioning is a validation error.
+  
 web_context:
   header:    "WEB SEARCH CONTEXT  [{label}]  (fetched {date})"
   separator: "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
