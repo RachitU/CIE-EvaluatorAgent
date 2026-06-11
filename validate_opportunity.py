@@ -5,22 +5,22 @@ Startup Idea Validation System
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 STAGE 1 — Problem Definition Agent
   Coaches students to define:
-    · Problem Statement
-    · Customer
-    · Consequence
-    · Assumptions
-  Hard cap: 4 turns, then outputs whatever it has.
+    · Customer / Consumer (who has the problem)
+    · Consequence (what happens because of the problem)
+    · Assumptions (what the team assumes right now)
+  Problem statement is derived from the initial description.
+  Hard cap: 3 turns, then outputs whatever it has.
 
-STAGE 2 — TIPS Evaluation Agent
-  Traffic-light scoring on:
+STAGE 2 — TIPS Evaluation Agent  [C excluded — TIPS only]
+  Traffic-light coaching on:
     · T — Timely
     · I — Important
     · P — Profitable
     · S — Solvable
-  (C — Contextual excluded at this stage)
+  Produces a refined problem statement + strength/gaps analysis.
 
 STAGE 3 — Idea Check Agent
-  Quick sanity check on proposed solution.
+  Steers students toward a structured solution statement.
   Flags obvious red flags; approves sensible ideas.
 
 OUTPUT — Structured JSON ready for DFV analysis
@@ -58,18 +58,34 @@ def _load_yaml(rel_path: str) -> dict:
         return yaml.safe_load(fh)
 
 
+def _load_skill_body(rel_path: str) -> str:
+    """Parse a SKILL.md file and return the instruction body (after YAML frontmatter)."""
+    with open(BASE_DIR / rel_path, "r", encoding="utf-8") as fh:
+        lines = fh.readlines()
+    if not lines or lines[0].strip() != "---":
+        return "".join(lines).strip()
+    for i, line in enumerate(lines[1:], start=1):
+        if line.strip() == "---":
+            return "".join(lines[i + 1:]).strip()
+    return "".join(lines).strip()
+
+
 cfg      = _load_yaml("config/settings.yaml")
 prob_p   = _load_yaml("prompts/problem_agent.yaml")
 opp_p    = _load_yaml("prompts/opportunity_agent.yaml")
 idea_p   = _load_yaml("prompts/idea_agent.yaml")
 ui       = _load_yaml("prompts/ui_strings.yaml")
 
+_tips_skill = _load_skill_body("skills/opportunity-evaluator/SKILL.md")
+_idea_skill = _load_skill_body("skills/idea-evaluator/SKILL.md")
+
 _val     = cfg["validation"]
 _search  = cfg["search"]
 _display = cfg["display"]
 
 MAX_TURNS_PER_CRITERION = _val["max_turns_per_criterion"]
-MAX_PROBLEM_TURNS       = 4   # Hard cap for Stage 1
+MAX_PROBLEM_TURNS       = 3   # Hard cap for Stage 1 (3 questions: Customer, Consequence, Assumptions)
+MAX_IDEA_CLARIFY_TURNS  = 3   # Max clarifying questions in Stage 3 (only triggered when solution is vague)
 W                       = _display["console_width"]
 
 
@@ -433,6 +449,22 @@ def extract_problem_fields(text: str) -> dict:
     return fields
 
 
+def extract_refined_problem(text: str) -> str:
+    """Extract REFINED PROBLEM STATEMENT from TIPS completion output."""
+    marker = "REFINED PROBLEM STATEMENT:"
+    idx = text.upper().find(marker)
+    if idx == -1:
+        return ""
+    chunk = text[idx + len(marker):].strip()
+    end = len(chunk)
+    for sep in ["\n\n", "\nTIPS", "\nSCORES", "\nCOACHING", "\nSTRENGTH", "\nGAPS"]:
+        pos = chunk.find(sep)
+        if 0 <= pos < end:
+            end = pos
+    result = chunk[:end].strip()
+    return result if len(result) > 10 else ""
+
+
 # ══════════════════════════════════════════════════════════════
 # WEB SEARCH HELPERS
 # ══════════════════════════════════════════════════════════════
@@ -526,7 +558,7 @@ problem_agent = Agent(
 tips_agent = Agent(
     role=opp_p["agent"]["role"],
     goal=opp_p["agent"]["goal"],
-    backstory=opp_p["agent"]["backstory"],
+    backstory=opp_p["agent"]["backstory"].strip() + "\n\n" + _tips_skill,
     verbose=False,
     llm=llm,
 )
@@ -534,7 +566,7 @@ tips_agent = Agent(
 idea_agent = Agent(
     role=idea_p["agent"]["role"],
     goal=idea_p["agent"]["goal"],
-    backstory=idea_p["agent"]["backstory"],
+    backstory=idea_p["agent"]["backstory"].strip() + "\n\n" + _idea_skill,
     verbose=False,
     llm=llm,
 )
@@ -544,26 +576,12 @@ idea_agent = Agent(
 # JSON OUTPUT BUILDER
 # ══════════════════════════════════════════════════════════════
 
-def build_output_json(state: ValidationState, idea_notes: str) -> dict:
-    """
-    Assemble the final structured JSON that passes to DFV.
-    Mirrors the structure defined by the course instructor.
-    """
-    _names  = {"T": "Timely", "I": "Important", "P": "Profitable", "S": "Solvable"}
-    lights  = ui["traffic_lights"]
-
-    tips_metrics = {}
-    for key in ["T", "I", "P", "S"]:
-        score = state.tips_scores.get(key, "YELLOW")
-        label = lights.get(score, score)
-        tips_metrics[_names[key].lower() + "_score"] = label
-
-    # Extract TIPS narrative lines from the final TIPS report
-    tips_narrative = {}
+def build_output_json(state: ValidationState) -> dict:
+    """Assemble the final structured JSON that passes to DFV."""
     narrative_keys = {
         "T": "timely_factor",
         "I": "importance_metric",
-        "P": "profitability_pivot",
+        "P": "profitability",
         "S": "solvability_constraint",
     }
     patterns = {
@@ -572,34 +590,25 @@ def build_output_json(state: ValidationState, idea_notes: str) -> dict:
         "P": r"P\s*[—\-]\s*Profitable\s*:\s*(?:GREEN|YELLOW|RED)\s*[—\-]\s*(.+)",
         "S": r"S\s*[—\-]\s*Solvable\s*:\s*(?:GREEN|YELLOW|RED)\s*[—\-]\s*(.+)",
     }
+    tips_narrative = {}
     for key, pattern in patterns.items():
         match = re.search(pattern, state.tips_report, re.IGNORECASE)
         tips_narrative[narrative_keys[key]] = match.group(1).strip() if match else ""
 
-    output = {
+    return {
         "refined_idea": {
-            "customer_segment":    state.customer,
-            "qualified_problem":   state.problem_statement,
-            "consequence":         state.consequence,
-            "assumptions":         state.assumptions,
-            "proposed_solution":   state.solution,
+            "customer_segment":  state.customer,
+            "qualified_problem": state.problem_statement,
+            "consequence":       state.consequence,
+            "proposed_solution": state.solution,
         },
         "tips_validated_metrics": {
-            "timely_score":            tips_metrics.get("timely_score", ""),
-            "timely_factor":           tips_narrative.get("timely_factor", ""),
-            "importance_score":        tips_metrics.get("importance_score", ""),
-            "importance_metric":       tips_narrative.get("importance_metric", ""),
-            "profitability_score":     tips_metrics.get("profitability_score", ""),
-            "profitability_pivot":     tips_narrative.get("profitability_pivot", ""),
-            "solvability_score":       tips_metrics.get("solvability_score", ""),
-            "solvability_constraint":  tips_narrative.get("solvability_constraint", ""),
+            "timely_factor":          tips_narrative.get("timely_factor", ""),
+            "importance_metric":      tips_narrative.get("importance_metric", ""),
+            "profitability":          tips_narrative.get("profitability", ""),
+            "solvability_constraint": tips_narrative.get("solvability_constraint", ""),
         },
-        "idea_check": {
-            "verdict":    "APPROVED",
-            "notes":      idea_notes,
-        }
     }
-    return output
 
 
 # ══════════════════════════════════════════════════════════════
@@ -621,7 +630,7 @@ class ValidationFlow(Flow[ValidationState]):
         return self.state.raw_input
 
     # ──────────────────────────────────────────────────────────
-    # STAGE 1b — Problem Definition Loop (max 4 turns)
+    # STAGE 1b — Problem Definition Loop (max 3 turns)
     # ──────────────────────────────────────────────────────────
 
     @listen(collect_input)
@@ -690,9 +699,9 @@ class ValidationFlow(Flow[ValidationState]):
 
         # If we hit the cap without completion, force the final output
         if not prob_complete(report):
-            # Inject the turn-4 instruction into a final call
+            # Inject the turn-3 instruction into a final call
             final_input = (
-                f"MANDATORY FINAL TURN — Turn 4 of 4.\n"
+                f"MANDATORY FINAL TURN — Turn 3 of 3.\n"
                 f"Output DEFINITION_COMPLETE now using everything gathered.\n"
                 f"Write 'Not specified' for any missing field.\n\n"
             ) + prob_p["tasks"]["followup"].format(
@@ -702,7 +711,7 @@ class ValidationFlow(Flow[ValidationState]):
                 assumptions       = extract_problem_fields(report)["assumptions"]       or "Not specified",
                 last_q            = "(final turn — output the definition now)",
                 last_a            = "(no more input from student)",
-                turn              = 4,
+                turn              = 3,
             )
             task = Task(
                 description=final_input,
@@ -869,6 +878,10 @@ class ValidationFlow(Flow[ValidationState]):
 
         self.state.tips_status = "COMPLETE"
 
+        refined = extract_refined_problem(report)
+        if refined:
+            self.state.problem_statement = refined
+
         section(ui["section_titles"]["tips_complete"])
         print(report.strip())
         print()
@@ -918,13 +931,20 @@ class ValidationFlow(Flow[ValidationState]):
         self.state.idea_history.append({"role": "agent", "content": result})
         self.state.idea_report = result
 
-        # One clarification allowed if too vague
-        if idea_needs_clarity(result):
+        # Up to MAX_IDEA_CLARIFY_TURNS clarifying questions (only if solution is vague)
+        clarify_turn = 0
+        while idea_needs_clarity(result) and clarify_turn < MAX_IDEA_CLARIFY_TURNS:
             agent_says(result)
             answer = ask(ui["prompts"]["response_input"])
             self.state.idea_history.append({"role": "user", "content": answer})
+            clarify_turn += 1
 
             last_q, last_a = last_exchange(self.state.idea_history)
+            is_final = clarify_turn >= MAX_IDEA_CLARIFY_TURNS
+            force_final = (
+                "MANDATORY FINAL TURN — You MUST output APPROVED or FLAG now. No more questions."
+                if is_final else ""
+            )
             description = idea_p["tasks"]["clarify"].format(
                 problem_statement = self.state.problem_statement,
                 customer          = self.state.customer,
@@ -932,15 +952,25 @@ class ValidationFlow(Flow[ValidationState]):
                 solution          = solution,
                 last_q            = last_q,
                 last_a            = last_a,
+                turn              = clarify_turn,
+                max_turns         = MAX_IDEA_CLARIFY_TURNS,
+                force_final       = force_final,
+            )
+            expected = (
+                "VERDICT: APPROVED or FLAG\n"
+                "If APPROVED: IDEA NOTES:\n"
+                "If FLAG: ISSUE: then SUGGESTED FIX:\n"
+                "No JSON. No markdown. No preamble."
+            ) if is_final else (
+                "VERDICT: APPROVED or NEEDS_CLARITY or FLAG\n"
+                "If APPROVED: IDEA NOTES:\n"
+                "If NEEDS_CLARITY: QUESTION:\n"
+                "If FLAG: ISSUE: then SUGGESTED FIX:\n"
+                "No JSON. No markdown. No preamble."
             )
             task = Task(
                 description=description,
-                expected_output=(
-                    "VERDICT: APPROVED or FLAG\n"
-                    "If APPROVED: IDEA NOTES:\n"
-                    "If FLAG: ISSUE: then SUGGESTED FIX:\n"
-                    "No JSON. No markdown. No preamble."
-                ),
+                expected_output=expected,
                 agent=idea_agent,
             )
             result = run_agent(task, idea_agent)
@@ -958,24 +988,16 @@ class ValidationFlow(Flow[ValidationState]):
     def final_report(self, idea_result):
         labels = ui["report_labels"]
 
-        # Extract idea notes from result
-        idea_notes = ""
-        if "IDEA NOTES:" in idea_result.upper():
-            idx        = idea_result.upper().find("IDEA NOTES:")
-            idea_notes = idea_result[idx + len("IDEA NOTES:"):].strip().split("\n\n")[0].strip()
-
-        # Build the final JSON
-        output_json = build_output_json(self.state, idea_notes)
+        output_json = build_output_json(self.state)
 
         section(ui["section_titles"]["final"])
 
         hr("-")
         print(f"  {labels['problem']}")
         hr("-")
-        print(f"  Statement  : {self.state.problem_statement}")
+        print(f"  Problem    : {self.state.problem_statement}")
         print(f"  Customer   : {self.state.customer}")
         print(f"  Consequence: {self.state.consequence}")
-        print(f"  Assumptions: {self.state.assumptions}")
         print()
 
         hr("-")
