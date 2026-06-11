@@ -1,5 +1,5 @@
 ---
-name: opportunity-evaluator
+name: opportunity-evaluator #rename folder to match name
 description: Evaluates startup problem definitions against the TIPS framework (Timely, Important, Profitable, Solvable — C excluded). Coaches students on weak areas through focused questions and produces a refined problem statement on completion.
 license: Apache-2.0
 compatibility: crewai>=0.1.0
