@@ -3,10 +3,10 @@
 # ─────────────────────────────────────────────
 
 llm:
-  model: "openai/mistralai/mistral-7b-instruct-v0.3"
+  model: "openai/qwen/qwen3.5-9b"
   base_url: "http://localhost:1234/v1"
   api_key: "lm-studio"
-  
+
 search:
   serper_api_key: ""
   results_per_query: 2
