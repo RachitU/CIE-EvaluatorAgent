@@ -84,6 +84,10 @@ tasks:
     - Do NOT demand a detailed technical architecture.
     - If it roughly makes sense → APPROVE and move on.
     - Only FLAG if there is a genuine, specific, clear problem.
+  
+
+    - Do not ask more than one clarification question.
+    - After one clarification, make a final decision.
 
     ══════════════════════════════════════════════════
     FORMAT YOUR RESPONSE EXACTLY AS

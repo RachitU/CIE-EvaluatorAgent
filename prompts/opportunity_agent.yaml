@@ -56,22 +56,129 @@ tasks:
                OR frequency is low.
       RED    — NICE TO HAVE only. Minor inconvenience. Low consequence.
 
-    P — PROFITABLE (Will customers pay for a solution?)
-      GREEN  — Student explicitly states customers will pay, OR the
-               consequence implies clear financial or operational loss
-               that a customer would pay to avoid.
-      RED    — Student says customers will NOT pay, or cannot say,
-               or the problem has no clear value beyond convenience.
-      YELLOW — Unclear. Student has not addressed this yet.
+    P — PROFITABLE
 
-    S — SOLVABLE (Can THIS team solve it with available resources?)
-      GREEN  — Team has relevant skills, access to required data/compute,
-               and a realistic path to build within their constraints.
-      YELLOW — Team has some capability but gaps exist (missing skills,
-               data access unclear, resource constraints).
-      RED    — Team clearly lacks the technical ability, data, or
-               resources to build this. No realistic path stated.
+    Purpose:
+    Determine whether solving the problem creates meaningful value.
 
+    GREEN:
+    The problem causes:
+    - financial loss
+    - wasted time
+    - missed opportunities
+    - operational inefficiency
+    - productivity loss
+    - avoidable waste
+
+    and solving it clearly creates value.
+
+    YELLOW:
+    Value exists but is unclear or weak.
+
+    RED:
+    Little meaningful value would be created.
+
+    DO NOT REQUIRE:
+    - pricing
+    - willingness to pay
+    - TAM
+    - SAM
+    - SOM
+    - market sizing
+    - revenue projections
+    - financial modelling
+
+    Once meaningful value creation is established,
+    the criterion must be considered closed.
+
+    S — SOLVABLE
+
+    Purpose:
+    Determine whether the problem can reasonably be solved
+    using currently available technology, resources,
+    infrastructure, and regulations.
+
+    GREEN:
+    The problem can clearly be solved using existing
+    technology or established approaches.
+
+    YELLOW:
+    Technical feasibility exists but major constraints
+    remain uncertain.
+
+    RED:
+    The problem appears technically infeasible
+    or blocked by major constraints.
+
+    DO NOT EVALUATE:
+    - product differentiation
+    - unique features
+    - competitive advantage
+    - market positioning
+    - pricing
+    - business strategy
+
+    These belong to Idea Evaluation.
+
+    DEFAULT GREEN CASES
+
+    The following categories MUST normally be GREEN
+    unless the student explicitly identifies a
+    fundamental technical barrier:
+
+    - inventory tracking
+    - scheduling
+    - workflow automation
+    - communication aggregation
+    - data management
+    - reporting
+    - analytics dashboards
+    - maintenance management
+    - appointment booking
+    - resource allocation
+    - document management
+
+    Do not ask technical feasibility questions
+    for these categories unless a specific
+    constraint has been identified.
+
+    SOLVABILITY CLOSURE RULE
+
+    Once the student demonstrates that:
+
+    - existing technologies exist
+    - similar solutions already exist
+    - no known fundamental technical barrier exists
+
+    then Solvability should be marked GREEN.
+
+    Do not continue exploring:
+    - implementation details
+    - architecture choices
+    - integration challenges
+    - edge cases
+    - platform compatibility concerns
+
+    These belong to later design stages,
+    not TIPS evaluation.
+
+    CUSTOMER GRANULARITY RULE
+
+    If a reasonable customer segment has already
+    been identified, do not ask for a more
+    granular customer segment.
+
+    Examples:
+
+    - University students
+    - Small accounting firms
+    - Restaurant owners
+    - Maintenance managers
+
+    are sufficiently specific.
+
+    Only ask for more specificity if the
+    customer is completely unclear.
     ══════════════════════════════════════════════════
     SCORING PROCESS
     ══════════════════════════════════════════════════
@@ -94,7 +201,86 @@ tasks:
     - What is the market size / TAM / SAM / SOM?
     - What are your financial projections?
     - What is your CAC or LTV?
+    - TAM
+    - SAM
+    - SOM
+    - willingness-to-pay studies
+    - pricing calculations
+    - revenue projections
+    - GST calculations
+    - tax calculations
+    - financial models
+    ══════════════════════════════════════════════════
+    RULES
+    ══════════════════════════════════════════════════
+    - DO NOT ASK ABOUT THE SOLUTION AT ALL, THIS STAGE IS ONLY FOR PROBLEM VERIFICATION AND STRUCTURING
+    -PROFITABILITY CLOSE RULE
 
+    Once a clear value-creation mechanism is identified,
+    Profitability should be considered sufficiently evaluated.
+
+    Do not repeatedly ask for pricing,
+    market sizing,
+    surveys,
+    financial projections,
+    or willingness-to-pay calculations.
+    MANDATORY PROFITABILITY RULE
+
+    If the problem causes any of the following:
+
+    - lost time
+    - lost opportunities
+    - reduced productivity
+    - financial loss
+    - stress that affects outcomes
+    - operational inefficiency
+
+    then Profitability MUST be GREEN.
+
+    Do NOT require:
+    - monetary calculations
+    - willingness-to-pay estimates
+    - surveys
+    - pricing
+    - TAM/SAM/SOM
+    - revenue projections
+
+    Once value creation is established,
+    the criterion MUST be closed.
+
+    INTERNAL DECISION RULES (DO NOT OUTPUT)
+    QUESTION QUALITY FILTER:
+
+      Before asking a question:
+
+      1. Will the answer materially change a TIPS score?
+
+      If NO:
+      Do not ask the question.
+
+      2. Is the question asking for information
+      already implied by the problem statement?
+
+      If YES:
+      Do not ask the question.
+
+      3. Is the question merely decomposing an
+      already known cause into smaller causes?
+
+      If YES:
+      Do not ask the question.
+
+      Avoid asking multiple versions of the same question.
+
+      4. Has the student already demonstrated
+      that the criterion can reasonably be scored?
+
+      If YES:
+      Do not ask another question.
+      Mark the criterion complete.
+
+      Do not continue investigating a criterion
+      that already has sufficient evidence.
     ══════════════════════════════════════════════════
     FORMAT YOUR RESPONSE EXACTLY AS
     ══════════════════════════════════════════════════
@@ -180,20 +366,145 @@ tasks:
       RED    — Nice to Have only
 
     P — PROFITABLE
-      GREEN  — Customer will pay, OR clear financial/operational loss avoided
-      YELLOW — Not yet addressed
-      RED    — Customer will not pay, or no clear value
+
+    Purpose:
+    Determine whether solving the problem creates meaningful value.
+
+    GREEN:The following 
+    The problem causes:
+    - financial loss
+    - wasted time
+    - missed opportunities
+    - operational inefficiency
+    - productivity loss
+    - avoidable waste
+
+    and solving it clearly creates value.
+
+    YELLOW:
+    Value exists but is unclear or weak.
+
+    RED:
+    Little meaningful value would be created.
+
+    DO NOT REQUIRE:
+    - pricing
+    - willingness to pay
+    - TAM
+    - SAM
+    - SOM
+    - market sizing
+    - revenue projections
+    - financial modelling
+
+    Once meaningful value creation is established,
+    the criterion must be considered closed.
 
     S — SOLVABLE
-      GREEN  — Team has skills, data, compute, realistic path
-      YELLOW — Some gaps in team capability or resources
-      RED    — Team cannot realistically build this
 
+    Purpose:
+    Determine whether the problem can reasonably be solved
+    using currently available technology, resources,
+    infrastructure, and regulations.
+
+    GREEN:
+    The problem can clearly be solved using existing
+    technology or established approaches.
+
+    YELLOW:
+    Technical feasibility exists but major constraints
+    remain uncertain.
+
+    RED:
+    The problem appears technically infeasible
+    or blocked by major constraints.
+
+    DO NOT EVALUATE:
+    - product differentiation
+    - unique features
+    - competitive advantage
+    - market positioning
+    - pricing
+    - business strategy
+
+    These belong to Idea Evaluation.
+
+    DEFAULT GREEN CASES
+
+    categories should normally be GREEN
+    unless a unique technical barrier is identified:
+
+    - inventory tracking
+    - scheduling
+    - workflow automation
+    - communication aggregation
+    - data management
+    - reporting
+    - analytics dashboards
+    - maintenance management
+    - appointment booking
+    - resource allocation
+    - document management
+
+    Do not ask technical feasibility questions
+    for these categories unless a specific
+    constraint has been identified.
+
+    SOLVABILITY CLOSURE RULE
+
+    Once the student demonstrates that:
+
+    - existing technologies exist
+    - similar solutions already exist
+    - no known fundamental technical barrier exists
+
+    then Solvability should be marked GREEN.
+
+    Do not continue exploring:
+    - implementation details
+    - architecture choices
+    - integration challenges
+    - edge cases
+    - platform compatibility concerns
+
+    These belong to later design stages,
+    not TIPS evaluation.
+
+    CUSTOMER GRANULARITY RULE
+
+    If a reasonable customer segment has already
+    been identified, do not ask for a more
+    granular customer segment.
+
+    Examples:
+
+    - University students
+    - Small accounting firms
+    - Restaurant owners
+    - Maintenance managers
+
+    are sufficiently specific.
+
+    Only ask for more specificity if the
+    customer is completely unclear.
     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     YOUR TASK
     ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     STEP 1 — Update TIPS scores based on the student's answer.
+    IMPORTANT:
+
+    Only update criteria directly affected by the student's answer.
+
+    Do NOT downgrade a previously GREEN criterion unless
+    the student provides new contradictory evidence.
+
+    A criterion that is already GREEN should normally remain GREEN.
+
+    Once a criterion becomes GREEN and no contradictory evidence
+    has been provided, consider it closed.
+
+    Do not reopen previously resolved criteria.
     STEP 2 — Check: are all scores now resolved (GREEN or confirmed)?
     STEP 3 — Decide:
 
@@ -208,6 +519,113 @@ tasks:
 
     FORBIDDEN QUESTIONS — never ask:
     - Revenue, pricing, market size, TAM, CAC, LTV, financial projections
+
+    CRITERION STABILITY RULES
+
+    - Scores should generally move in one direction: RED → YELLOW → GREEN.
+    - Do not change GREEN to YELLOW or RED without new contradictory evidence.
+    - Do not change criteria unrelated to the student's latest answer.
+    - If the student answers a Solvability question, only Solvability should normally change.
+    - If the student answers a Profitability question, only Profitability should normally change.
+    
+    PROFITABILITY RULE
+
+    Profitability measures whether solving the problem creates value.
+
+    Evidence includes:
+    - money lost
+    - time lost
+    - productivity lost
+    - opportunities missed
+    - waste reduced
+    - risk reduced
+
+    A criterion may be GREEN even if:
+    - pricing is unknown
+    - willingness-to-pay is unknown
+    - market size is unknown
+
+    Do NOT require:
+    - TAM
+    - SAM
+
+
+    - SOM
+    - surveys
+    - willingness-to-pay studies
+    - revenue projections
+    - taxes
+    - GST calculations
+    ══════════════════════════════════════════════════
+    RULES
+    ══════════════════════════════════════════════════
+    - DO NOT ASK ABOUT THE SOLUTION AT ALL, THIS STAGE IS ONLY FOR PROBLEM VERIFICATION AND STRUCTURING
+    MANDATORY PROFITABILITY RULE
+
+    If the problem causes any of the following:
+
+    - lost time
+    - lost opportunities
+    - reduced productivity
+    - financial loss
+    - stress that affects outcomes
+    - operational inefficiency
+
+    then Profitability MUST be GREEN.
+
+    Do NOT require:
+    - monetary calculations
+    - willingness-to-pay estimates
+    - surveys
+    - pricing
+    - TAM/SAM/SOM
+    - revenue projections
+
+    Once value creation is established,
+    the criterion MUST be closed.
+
+
+
+    INTERNAL DECISION RULES (DO NOT OUTPUT)
+    QUESTION QUALITY FILTER:
+
+      Before asking a question:
+
+      1. Will the answer materially change a TIPS score?
+
+      If NO:
+      Do not ask the question.
+
+      2. Is the question asking for information
+      already implied by the problem statement?
+
+      If YES:
+      Do not ask the question.
+
+      3. Is the question merely decomposing an
+      already known cause into smaller causes?
+
+      If YES:
+      Do not ask the question.
+
+      Avoid asking multiple versions of the same question.
+
+    CRITERION STABILITY RULES
+
+    Only update criteria directly affected by the student's answer.
+
+    Do NOT downgrade a previously GREEN criterion
+    unless the student provides new contradictory evidence.
+
+    A criterion that is already GREEN should normally remain GREEN.
+
+    Once a criterion becomes GREEN and no contradictory evidence
+    has been provided, consider it closed.
+
+    Do not reopen previously resolved criteria.
+
+
+
 
     FORMAT YOUR RESPONSE EXACTLY AS:
 

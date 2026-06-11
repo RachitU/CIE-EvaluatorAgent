@@ -126,11 +126,29 @@ class ValidationState(BaseModel):
     idea_status:       str  = "PENDING"   # PENDING → IN_PROGRESS → APPROVED
     idea_report:       str  = ""
     idea_last_q:       str  = ""
-
+    tips_explanations: dict = {}
+    idea_verdict: str = ""
+    idea_notes: str = ""
 
 # ══════════════════════════════════════════════════════════════
 # CLI UTILITIES
-# ══════════════════════════════════════════════════════════════
+# ══════════════════════════════════════════
+def parse_tips_explanations(text: str):
+    explanations = {}
+
+    patterns = {
+    "T": r"T\s*[—\-]\s*Timely\s*:\s*.*?(GREEN|YELLOW|RED)",
+    "I": r"I\s*[—\-]\s*Important\s*:\s*.*?(GREEN|YELLOW|RED)",
+    "P": r"P\s*[—\-]\s*Profitable\s*:\s*.*?(GREEN|YELLOW|RED)",
+    "S": r"S\s*[—\-]\s*Solvable\s*:\s*.*?(GREEN|YELLOW|RED)",
+}
+
+    for k, pattern in patterns.items():
+        m = re.search(pattern, text, re.IGNORECASE)
+        if m:
+            explanations[k] = m.group(1).strip()
+
+    return explanations
 
 def hr(char: str = "=") -> None:
     print(char * W)
@@ -376,26 +394,22 @@ def parse_criterion(text: str) -> str:
             return ch
     return ""
 
-
 def parse_tips_scores(text: str) -> dict:
-    """
-    Extract current TIPS traffic light scores from agent output.
-    Looks for lines like: T — Timely: GREEN — ...
-    """
     scores = {}
+
     patterns = {
-        "T": r"T\s*[—\-]\s*Timely\s*:\s*(GREEN|YELLOW|RED)",
-        "I": r"I\s*[—\-]\s*Important\s*:\s*(GREEN|YELLOW|RED)",
-        "P": r"P\s*[—\-]\s*Profitable\s*:\s*(GREEN|YELLOW|RED)",
-        "S": r"S\s*[—\-]\s*Solvable\s*:\s*(GREEN|YELLOW|RED)",
+        "T": r"T\s*[—\-]\s*Timely\s*:\s*.*?(GREEN|YELLOW|RED)",
+        "I": r"I\s*[—\-]\s*Important\s*:\s*.*?(GREEN|YELLOW|RED)",
+        "P": r"P\s*[—\-]\s*Profitable\s*:\s*.*?(GREEN|YELLOW|RED)",
+        "S": r"S\s*[—\-]\s*Solvable\s*:\s*.*?(GREEN|YELLOW|RED)",
     }
+
     for key, pattern in patterns.items():
         match = re.search(pattern, text, re.IGNORECASE)
         if match:
             scores[key] = match.group(1).upper()
+
     return scores
-
-
 def format_tips_scores(scores: dict) -> str:
     if not scores:
         return "(not yet evaluated)"
@@ -494,7 +508,10 @@ def criterion_search_context(criterion: str, problem_statement: str) -> str:
     queries_map = {
         "T": [f"{short} market trends urgency"],
         "I": [f"{short} user pain points importance"],
-        "P": [f"{short} willingness to pay business opportunity"],
+        "P": [
+    f"{short} financial impact",
+    f"{short} business value created"
+],
         "S": [f"{short} technical feasibility student project"],
     }
     queries = queries_map.get(criterion, [f"{short} market opportunity"])
@@ -554,7 +571,7 @@ def build_output_json(state: ValidationState, idea_notes: str) -> dict:
 
     tips_metrics = {}
     for key in ["T", "I", "P", "S"]:
-        score = state.tips_scores.get(key, "YELLOW")
+        score = state.tips_scores.get(key, "UNKNOWN")
         label = lights.get(score, score)
         tips_metrics[_names[key].lower() + "_score"] = label
 
@@ -584,20 +601,16 @@ def build_output_json(state: ValidationState, idea_notes: str) -> dict:
             "assumptions":         state.assumptions,
             "proposed_solution":   state.solution,
         },
-        "tips_validated_metrics": {
-            "timely_score":            tips_metrics.get("timely_score", ""),
-            "timely_factor":           tips_narrative.get("timely_factor", ""),
-            "importance_score":        tips_metrics.get("importance_score", ""),
-            "importance_metric":       tips_narrative.get("importance_metric", ""),
-            "profitability_score":     tips_metrics.get("profitability_score", ""),
-            "profitability_pivot":     tips_narrative.get("profitability_pivot", ""),
-            "solvability_score":       tips_metrics.get("solvability_score", ""),
-            "solvability_constraint":  tips_narrative.get("solvability_constraint", ""),
-        },
+       "tips_validated_metrics" : {
+    "timely_score": state.tips_scores.get("T","UNKNOWN"),
+    "importance_score": state.tips_scores.get("I","UNKNOWN"),
+    "profitability_score": state.tips_scores.get("P","UNKNOWN"),
+    "solvability_score": state.tips_scores.get("S","UNKNOWN"),
+},
         "idea_check": {
-            "verdict":    "APPROVED",
-            "notes":      idea_notes,
-        }
+    "verdict": state.idea_verdict,
+    "notes": state.idea_notes
+}
     }
     return output
 
@@ -862,6 +875,9 @@ class ValidationFlow(Flow[ValidationState]):
 
             # Update scores from latest response
             new_scores = parse_tips_scores(report)
+            self.state.tips_explanations.update(
+    parse_tips_explanations(report)
+)
             self.state.tips_scores.update(new_scores)
             self.state.tips_last_q = extract_question(report)
             self.state.tips_history.append({"role": "agent", "content": report})
@@ -872,6 +888,8 @@ class ValidationFlow(Flow[ValidationState]):
         section(ui["section_titles"]["tips_complete"])
         print(report.strip())
         print()
+        print("\nDEBUG TIPS STATE:")
+        print(self.state.tips_scores)
         print(f"  SCORES:\n{format_tips_scores(self.state.tips_scores)}")
         print()
         hr("-")
@@ -948,6 +966,14 @@ class ValidationFlow(Flow[ValidationState]):
             self.state.idea_report = result
 
         self.state.idea_status = "APPROVED" if idea_approved(result) else "FLAGGED"
+        self.state.idea_verdict = (
+    "APPROVED"
+    if idea_approved(result)
+    else "FLAG"
+)
+
+        self.state.idea_notes = result
+
         return result
 
     # ──────────────────────────────────────────────────────────

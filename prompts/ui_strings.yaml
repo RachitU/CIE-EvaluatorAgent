@@ -7,8 +7,8 @@ startup:
     This system helps you validate your startup idea in three stages.
 
     STAGE 1 — Problem Definition
-      Clarify: Problem · Customer · Consequence · Assumptions
-
+      Clarify: Problem · Customer · Consequence
+      (Optional: Assumptions)
     STAGE 2 — TIPS Evaluation
       T (Timely) · I (Important) · P (Profitable) · S (Solvable)
 
@@ -61,6 +61,7 @@ traffic_lights:
   GREEN:  "🟢 GREEN"
   YELLOW: "🟡 YELLOW"
   RED:    "🔴 RED"
+  "UNKNOWN": "⚪ UNKNOWN"
 
 force_close_template: |
   ⚠ MANDATORY OVERRIDE — CRITERION MUST CLOSE NOW

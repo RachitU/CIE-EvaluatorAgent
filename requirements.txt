@@ -8,3 +8,4 @@ sentence-transformers==2.7.0
 transformers>=4.41.0,<5
 torch>=2.0.0,<2.4
 numpy<2
+requests
