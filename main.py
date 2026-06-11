@@ -1,10 +1,10 @@
 """
-Entrepreneurial Opportunity Validation System — v2.0
+Entrepreneurial Opportunity Validation System — v2.1
 =====================================================
 
 Two-Phase Pipeline with hard iteration caps for local LLM stability.
 
-  Phase 1 — Problem Definition Agent  (MAX_PROB_TURNS student answers)
+  Phase 1 — Problem Definition Agent  (max_prob_turns student answers)
   ─────────────────────────────────────────────────────────────────────
   Steers student teams to articulate four components:
     • Problem Statement  — What is the problem, specifically?
@@ -21,7 +21,7 @@ Two-Phase Pipeline with hard iteration caps for local LLM stability.
   Student describes their proposed solution concept in free text.
   Feeds the S (Solvable) and P (Profitable) criteria in Phase 2.
 
-  Phase 2 — TIPS Evaluation Agent  (MAX_TIPS_TURNS student answers)
+  Phase 2 — TIPS Evaluation Agent  (max_tips_turns student answers)
   ──────────────────────────────────────────────────────────────────
   C (Context) is IGNORED in this phase.
 
@@ -32,25 +32,24 @@ Two-Phase Pipeline with hard iteration caps for local LLM stability.
     S — Solvable   : team skills, data, compute, and resources
 
   Coaches students on YELLOW/RED criteria each turn.
-  On the final iteration, or when all criteria are GREEN/YELLOW,
-  emits VERDICT: READY_FOR_DFV and the structured output JSON.
+  On the final iteration, emits VERDICT: READY_FOR_DFV and the JSON.
 
 Output JSON schema
 ──────────────────
 {
-    "structured_problem_definition": {
-        "problem_statement": "...",
-        "customer_segment": "...",
-        "consequence": "...",
-        "assumptions": ["...", "..."]
-    },
-    "tips_analysis": {
-        "timely": {"rating": "GREEN|YELLOW|RED", "evidence": "...", "gap": "...", "coaching": "..."},
-        "important": {"rating": "GREEN|YELLOW|RED", "evidence": "...", "gap": "...", "coaching": "..."},
-        "profitable": {"rating": "GREEN|YELLOW|RED", "evidence": "...", "gap": "...", "coaching": "..."},
-        "solvable": {"rating": "GREEN|YELLOW|RED", "evidence": "...", "gap": "...", "coaching": "..."}
-    },
-    "dfv_ready": true
+  "refined_idea": {
+    "customer_segment":   "...",
+    "qualified_problem":  "...",
+    "consequence":        "...",
+    "proposed_solution":  "..."
+  },
+  "tips_validated_metrics": {
+    "timely_factor":          "...",
+    "importance_metric":      "...",
+    "profitability_pivot":    "...",
+    "solvability_constraint": "..."
+  },
+  "tips_scores": { "T": "...", "I": "...", "P": "...", "S": "..." }
 }
 """
 
@@ -58,7 +57,6 @@ import json
 import os
 import re
 import sys
-from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
@@ -67,7 +65,6 @@ import requests
 import yaml
 from crewai import Agent, Crew, LLM, Process, Task
 from crewai.flow.flow import Flow, listen, start
-from crewai_tools import SerperDevTool
 from pydantic import BaseModel
 
 BASE_DIR = Path(__file__).parent
@@ -92,9 +89,10 @@ cfg = _load_yaml("config/settings.yaml")
 _search  = cfg["search"]
 _display = cfg["display"]
 
-# ── Iteration caps: these prevent hallucination spirals on local LLMs ─
-MAX_PROB_TURNS: int = 3   # Max student answers in Phase 1 before forced synthesis
-MAX_TIPS_TURNS: int = 4   # Max student answers in Phase 2 before forced final output
+# ── FIX 1: Read iteration caps from config so they can be tuned without code changes ──
+_val           = cfg.get("validation", {})
+MAX_PROB_TURNS: int = _val.get("max_prob_turns", 3)
+MAX_TIPS_TURNS: int = _val.get("max_tips_turns", 4)
 
 W: int = _display["console_width"]
 
@@ -105,11 +103,16 @@ llm = LLM(
     api_key  = llm_cfg["api_key"],
 )
 
+# ── FIX 2: Gate web search on enabled_for_local_llm flag ─────
+# Small local models (≤8B) cannot reliably prioritise injected web context.
+# They treat search results as primary signal rather than supporting evidence,
+# causing inconsistent ratings and schema drift in the final JSON.
+# Set enabled_for_local_llm: false in settings.yaml when using LM Studio / Ollama.
 _serper_key: str = (
     os.environ.get("SERPER_API_KEY")
     or _search.get("serper_api_key", "")
 )
-_search_on: bool = bool(_serper_key)
+_search_on: bool = bool(_serper_key) and _search.get("enabled_for_local_llm", True)
 
 print(f"\n  [Web search {'ENABLED' if _search_on else 'DISABLED'}]\n")
 
@@ -128,11 +131,11 @@ class ValidationState(BaseModel):
     customer_segment:  str = ""
     consequence:       str = ""
     assumptions:       str = ""
-    prob_turns:        int = 0        # counts student answers
-    prob_history:      List[dict] = []  # {"role": "agent"|"user", "content": str}
+    prob_turns:        int = 0
+    prob_history:      List[dict] = []
 
     # ── Phase 2 TIPS ratings ───────────────────────────────────
-    timely_rating:     str = ""       # GREEN / YELLOW / RED
+    timely_rating:     str = ""     # GREEN / YELLOW / RED
     important_rating:  str = ""
     profitable_rating: str = ""
     solvable_rating:   str = ""
@@ -177,15 +180,11 @@ def _wrap(text: str, width: Optional[int] = None) -> List[str]:
 
 
 def _pull_question(text: str) -> str:
-    """
-    Extract the QUESTION: block from agent output.
-    Falls back to the last line ending in '?' if the marker isn't present.
-    """
+    """Extract the QUESTION: block; fall back to last ?-terminated line."""
     upper = text.upper()
     if "QUESTION:" in upper:
         idx   = upper.rfind("QUESTION:")
         chunk = text[idx + 9:].strip()
-        # Stop at any downstream section header
         for stop in ["COACHING:", "FEEDBACK:", "STATUS:", "TIPS ANALYSIS:",
                      "VERDICT:", "NEXT STEP:", "STRUCTURED DEFINITION:"]:
             pos = chunk.upper().find(stop)
@@ -194,7 +193,6 @@ def _pull_question(text: str) -> str:
         first_line = chunk.split("\n")[0].strip()
         if len(first_line) > 5:
             return first_line
-    # Fallback: scan for last ?-terminated sentence
     for line in reversed(text.split("\n")):
         l = line.strip()
         if l.endswith("?") and len(l) > 10:
@@ -203,7 +201,7 @@ def _pull_question(text: str) -> str:
 
 
 def agent_says(text: str) -> None:
-    """Print agent response, then repeat the question in a prominent callout."""
+    """Print agent response, then highlight the question in a callout box."""
     question = _pull_question(text)
     print()
     hr("-")
@@ -227,10 +225,7 @@ def ask(prompt: str = "") -> str:
 
 
 def fmt_history(history: List[dict], last_n: int = 3) -> str:
-    """
-    Compact history: last N Q&A pairs.
-    Extracts the QUESTION: value from agent turns when present.
-    """
+    """Compact history: last N Q&A pairs, extracting QUESTION: values."""
     if not history:
         return "(No prior conversation.)"
     pairs: List[str] = []
@@ -286,7 +281,6 @@ def _serper(query: str) -> str:
 
 
 def web_ctx(queries: List[str], label: str) -> str:
-    """Run a list of queries and return a formatted context block."""
     if not _search_on or not queries:
         return ""
     sep  = "─" * W
@@ -316,8 +310,6 @@ def tips_web_ctx(problem: str, solution: str = "") -> str:
 # CREW RUNNER & OUTPUT CLEANER
 # ══════════════════════════════════════════════════════════════
 
-# Known section headers that mark the start of valid agent output.
-# Anything before the earliest match is tool-call noise and is discarded.
 _RESPONSE_MARKERS = [
     "PROBLEM DEFINITION STATUS:",
     "STRUCTURED DEFINITION:",
@@ -362,9 +354,6 @@ def run_agent(task: Task, agent: Agent) -> str:
 # AGENT DEFINITIONS
 # ══════════════════════════════════════════════════════════════
 
-# ── Problem Definition Coach ───────────────────────────────────
-# Guides students to articulate the four structural components of a problem.
-
 _PROB_AGENT = Agent(
     role="Problem Definition Coach",
     goal=(
@@ -384,9 +373,6 @@ _PROB_AGENT = Agent(
     verbose=False,
     llm=llm,
 )
-
-# ── TIPS Opportunity Evaluator ─────────────────────────────────
-# Scores the problem against T / I / P / S. C is intentionally skipped.
 
 _TIPS_RULES = """\
 TIPS SCORING RUBRIC  (C = Context is IGNORED in this phase)
@@ -437,17 +423,22 @@ _TIPS_AGENT = Agent(
 def extract_structured_defn(history: List[dict]) -> dict:
     """
     Scrape the most recent STRUCTURED DEFINITION: block from agent history.
-    Returns a dict with keys: problem_statement, customer_segment,
-    consequence, assumptions. Missing fields default to "".
+
+    FIX 3: Uses regex instead of plain string matching so it handles the
+    'Field : value' format (space before colon) that agents commonly emit,
+    not just 'Field:value'. Both formats are matched correctly.
     """
     out = {k: "" for k in ["problem_statement", "customer_segment",
                              "consequence", "assumptions"]}
-    field_labels: dict = {
-        "problem_statement": ["PROBLEM STATEMENT:", "PROBLEM:"],
-        "customer_segment":  ["CUSTOMER SEGMENT:", "CUSTOMER:", "WHO:"],
-        "consequence":       ["CONSEQUENCE:", "CONSEQUENCES:", "IMPACT:"],
-        "assumptions":       ["ASSUMPTIONS:", "ASSUMPTION:"],
+
+    # Maps state key → list of label stems to search for (no colon — regex adds it)
+    field_stems: dict = {
+        "problem_statement": ["PROBLEM STATEMENT", "PROBLEM"],
+        "customer_segment":  ["CUSTOMER SEGMENT", "CUSTOMER", "WHO"],
+        "consequence":       ["CONSEQUENCE", "CONSEQUENCES", "IMPACT"],
+        "assumptions":       ["ASSUMPTIONS", "ASSUMPTION"],
     }
+
     for turn in reversed(history):
         if turn["role"] != "agent":
             continue
@@ -455,21 +446,28 @@ def extract_structured_defn(history: List[dict]) -> dict:
         upper = text.upper()
         if "STRUCTURED DEFINITION:" not in upper:
             continue
-        # Work only within the STRUCTURED DEFINITION block
+
+        # Isolate the STRUCTURED DEFINITION block only
         block_start = upper.find("STRUCTURED DEFINITION:")
-        block       = text[block_start:]
-        block_upper = block.upper()
-        for key, labels in field_labels.items():
-            for label in labels:
-                if label in block_upper:
-                    idx  = block_upper.find(label)
-                    line = block[idx + len(label):].strip().split("\n")[0].strip()
-                    # Strip leading dashes or brackets sometimes added by the model
-                    line = re.sub(r'^[-–•\[\]]+\s*', '', line).strip()
-                    if line and line.lower() not in ("n/a", "none", "—", "-"):
+        block = text[block_start:]
+
+        for key, stems in field_stems.items():
+            for stem in stems:
+                # Match "Stem :" or "Stem:" (optional whitespace before colon)
+                pat = re.compile(re.escape(stem) + r"\s*:", re.IGNORECASE)
+                m   = pat.search(block)
+                if m:
+                    rest = block[m.end():].strip()
+                    line = rest.split("\n")[0].strip()
+                    # Clean leading punctuation the model sometimes adds
+                    line = re.sub(r"^[-–•\[\]]+\s*", "", line).strip()
+                    if line and line.lower() not in ("n/a", "none", "—", "-", ""):
                         out[key] = line
                         break
-        break  # Use only the latest block
+            if out[key]:
+                break   # Don't try remaining stems once a field is filled
+
+        break   # Use only the most recent STRUCTURED DEFINITION block
     return out
 
 
@@ -480,7 +478,6 @@ def parse_tips_ratings(text: str) -> dict:
     """
     ratings: dict = {k: "" for k in "TIPS"}
 
-    # Regex patterns matching lines like "T — Timely  : GREEN"
     patterns = [
         ("T", r"T\s*[—–\-]\s*Timely\s*[:\|]\s*(GREEN|YELLOW|RED)"),
         ("I", r"I\s*[—–\-]\s*Important\s*[:\|]\s*(GREEN|YELLOW|RED)"),
@@ -492,7 +489,7 @@ def parse_tips_ratings(text: str) -> dict:
         if m:
             ratings[key] = m.group(1).upper()
 
-    # Fallback: find letter prefix then search 80 chars ahead
+    # Fallback: find letter prefix then scan 80 chars ahead
     fallback_prefixes: dict = {
         "T": ["T —", "TIMELY:"],
         "I": ["I —", "IMPORTANT:"],
@@ -516,10 +513,7 @@ def parse_tips_ratings(text: str) -> dict:
 
 
 def extract_final_json(text: str) -> dict:
-    """
-    Find and parse the first JSON object in the agent output.
-    Tries ```json ... ``` fence first, then bare FINAL JSON: {...}.
-    """
+    """Parse the first JSON object: tries ```json fence, then bare FINAL JSON: {...}."""
     for pat in [r"```json\s*(\{.*?\})\s*```", r"```\s*(\{.*?\})\s*```"]:
         m = re.search(pat, text, re.DOTALL | re.IGNORECASE)
         if m:
@@ -554,11 +548,6 @@ def is_tips_final(text: str) -> bool:
 # ══════════════════════════════════════════════════════════════
 # PROMPT TEMPLATES
 # ══════════════════════════════════════════════════════════════
-#
-# Each function returns a fully-formed task description string.
-# Keeping prompts as functions (not constants) lets us inject
-# dynamic state at call time — important for local LLMs that lose
-# context quickly and need their instructions repeated each turn.
 
 def _prob_first_pass(raw_idea: str) -> str:
     return f"""\
@@ -595,8 +584,6 @@ def _prob_followup(
     latest_answer: str,
     is_last: bool,
 ) -> str:
-    """Prompt for each follow-up turn in the Problem Definition phase."""
-
     force_block = (
         "\n⚠ FINAL ITERATION — You MUST now output STATUS: DEFINITION_COMPLETE "
         "and a STRUCTURED DEFINITION block. Do NOT ask another question. "
@@ -644,10 +631,6 @@ FEEDBACK:
 
 
 def _prob_force_synthesis(raw_idea: str, history_text: str) -> str:
-    """
-    One-shot synthesis prompt when the normal loop ended without a
-    STRUCTURED DEFINITION block.  Output only — no questions asked.
-    """
     return f"""\
 Synthesise a structured problem definition from this student conversation.
 
@@ -664,7 +647,7 @@ STRUCTURED DEFINITION:
   Problem Statement : [concise, specific synthesis of the core problem]
   Customer Segment  : [the specific named group who experiences the problem]
   Consequence       : [quantified or clearly described negative outcome]
-    Assumptions       : [comma-separated list of key assumptions]\
+  Assumptions       : [comma-separated list of key assumptions]\
 """
 
 
@@ -679,8 +662,6 @@ def _tips_first_pass(
     return f"""\
 You are evaluating a student startup opportunity using the TIPS framework.
 C (Context) is IGNORED in this phase. Score T, I, P, and S only.
-Your job is to coach the student toward a clearer problem definition and a final
-DFV-ready handoff, not to keep the conversation open-ended.
 
 Student's structured problem definition:
   Problem Statement : {problem_statement}
@@ -694,11 +675,11 @@ Student's structured problem definition:
 Score each criterion based ONLY on what the student has actually stated.
 Never assume information they have not given you.
 
-SCORING RULES (repeat for your own reference):
-T — TIMELY:     GREEN if ≤6-month horizon or active daily problem | YELLOW if 6–12mo or medium-term | RED if >12mo, undefined, or hazy
-I — IMPORTANT:  GREEN if Must Have + direct consequence | YELLOW if Should Have or direct but moderate | RED if Nice to Have or trivial
-P — PROFITABLE: GREEN if customer clearly willing to pay or a credible payment path exists | YELLOW if maybe, but unclear | RED if no willingness to pay
-S — SOLVABLE:   GREEN if team has the skills, data, compute, and resources for an MVP | YELLOW if one clear gap exists | RED if major capability/resource gaps
+SCORING RULES:
+T — TIMELY:     GREEN if ≤6-month horizon or active daily problem | YELLOW if 6–12mo | RED if >12mo or unclear
+I — IMPORTANT:  GREEN if Must Have + measurable consequence | YELLOW if indirect/vague | RED if Nice to Have
+P — PROFITABLE: GREEN if customer clearly willing to pay + model named | YELLOW if possible | RED if no
+S — SOLVABLE:   GREEN if team has full MVP capability | YELLOW if one gap | RED if major gaps
 
 Write your response in EXACTLY this format:
 
@@ -730,8 +711,6 @@ def _tips_followup(
     latest_answer: str,
     is_last: bool,
 ) -> str:
-    """Prompt for each follow-up turn in the TIPS Evaluation phase."""
-
     ratings_line = "  ".join(f"{k}={v or '?'}" for k, v in current_ratings.items())
 
     final_instruction = (
@@ -747,55 +726,34 @@ def _tips_followup(
         "[ONE focused question about the weakest remaining criterion. End with '?']"
     )
 
-    # Build JSON template — using .format()-style substitution to avoid brace conflicts
     ps_e  = problem_statement.replace('"', "'")
     cs_e  = customer_segment.replace('"', "'") or "(not captured)"
     con_e = consequence.replace('"', "'")       or "(not captured)"
-    ass_e = assumptions.replace('"', "'; '") if assumptions else "(not captured)"
     sol_e = (proposed_solution or "To be defined in DFV phase").replace('"', "'")
-    t_r   = current_ratings.get("T", "YELLOW")
-    i_r   = current_ratings.get("I", "YELLOW")
-    p_r   = current_ratings.get("P", "YELLOW")
-    s_r   = current_ratings.get("S", "YELLOW")
 
     json_template = (
         "\nVERDICT: READY_FOR_DFV\n\n"
         "FINAL JSON:\n"
         "```json\n"
         "{\n"
-        '  "structured_problem_definition": {\n'
-        f'    "problem_statement": "{ps_e}",\n'
+        '  "refined_idea": {\n'
         f'    "customer_segment": "{cs_e}",\n'
+        f'    "qualified_problem": "{ps_e}",\n'
         f'    "consequence": "{con_e}",\n'
-        f'    "assumptions": ["{ass_e}"]\n'
+        f'    "proposed_solution": "{sol_e}"\n'
         "  },\n"
-        '  "tips_analysis": {\n'
-        '    "timely": {\n'
-        f'      "rating": "{t_r}",\n'
-        '      "evidence": "[one sentence explaining T rating and time horizon evidence]",\n'
-        '      "gap": "[what is still unclear about timing]",\n'
-        '      "coaching": "[one concrete coaching suggestion]"\n'
-        '    },\n'
-        '    "important": {\n'
-        f'      "rating": "{i_r}",\n'
-        '      "evidence": "[one sentence explaining I rating and consequence severity]",\n'
-        '      "gap": "[what is still unclear about importance]",\n'
-        '      "coaching": "[one concrete coaching suggestion]"\n'
-        '    },\n'
-        '    "profitable": {\n'
-        f'      "rating": "{p_r}",\n'
-        '      "evidence": "[one sentence explaining P rating or the payment model to pursue]",\n'
-        '      "gap": "[what is still unclear about willingness to pay]",\n'
-        '      "coaching": "[one concrete coaching suggestion]"\n'
-        '    },\n'
-        '    "solvable": {\n'
-        f'      "rating": "{s_r}",\n'
-        '      "evidence": "[one sentence on S rating and the key resource gap if any]",\n'
-        '      "gap": "[what is still unclear about solvability]",\n'
-        '      "coaching": "[one concrete coaching suggestion]"\n'
-        '    }\n'
+        '  "tips_validated_metrics": {\n'
+        '    "timely_factor":          "[one sentence explaining T rating and time horizon evidence]",\n'
+        '    "importance_metric":      "[one sentence explaining I rating and consequence severity]",\n'
+        '    "profitability_pivot":    "[one sentence explaining P rating or the payment model to pursue]",\n'
+        '    "solvability_constraint": "[one sentence on S rating and the key resource gap if any]"\n'
         "  },\n"
-        '  "dfv_ready": true\n'
+        '  "tips_scores": {\n'
+        '    "T": "[use your updated T rating above: GREEN, YELLOW, or RED]",\n'
+        '    "I": "[use your updated I rating above: GREEN, YELLOW, or RED]",\n'
+        '    "P": "[use your updated P rating above: GREEN, YELLOW, or RED]",\n'
+        '    "S": "[use your updated S rating above: GREEN, YELLOW, or RED]"\n'
+        "  }\n"
         "}\n"
         "```"
     ) if is_last else ""
@@ -843,10 +801,6 @@ def _tips_force_final(
     current_ratings: dict,
     history_text: str,
 ) -> str:
-    """
-    Last-resort synthesis prompt when the TIPS loop hit the cap
-    without emitting a final verdict.  Output only — no questions.
-    """
     t_r   = current_ratings.get("T", "YELLOW")
     i_r   = current_ratings.get("I", "YELLOW")
     p_r   = current_ratings.get("P", "YELLOW")
@@ -854,7 +808,6 @@ def _tips_force_final(
     ps_e  = problem_statement.replace('"', "'")
     cs_e  = customer_segment.replace('"', "'")   or "(not captured)"
     con_e = consequence.replace('"', "'")         or "(not captured)"
-    ass_e = "(not captured)"
     sol_e = (proposed_solution or "To be defined in DFV phase").replace('"', "'")
 
     return (
@@ -877,19 +830,24 @@ def _tips_force_final(
         "FINAL JSON:\n"
         "```json\n"
         "{\n"
-        '  "structured_problem_definition": {\n'
-        f'    "problem_statement": "{ps_e}",\n'
+        '  "refined_idea": {\n'
         f'    "customer_segment": "{cs_e}",\n'
+        f'    "qualified_problem": "{ps_e}",\n'
         f'    "consequence": "{con_e}",\n'
-        f'    "assumptions": ["{ass_e}"]\n'
+        f'    "proposed_solution": "{sol_e}"\n'
         "  },\n"
-        '  "tips_analysis": {\n'
-        '    "timely": {"rating": "'+t_r+'", "evidence": "[explain T]", "gap": "[gap]", "coaching": "[coaching]"},\n'
-        '    "important": {"rating": "'+i_r+'", "evidence": "[explain I]", "gap": "[gap]", "coaching": "[coaching]"},\n'
-        '    "profitable": {"rating": "'+p_r+'", "evidence": "[explain P or suggest a model]", "gap": "[gap]", "coaching": "[coaching]"},\n'
-        '    "solvable": {"rating": "'+s_r+'", "evidence": "[explain S]", "gap": "[gap]", "coaching": "[coaching]"}\n'
+        '  "tips_validated_metrics": {\n'
+        '    "timely_factor":          "[explain T]",\n'
+        '    "importance_metric":      "[explain I]",\n'
+        '    "profitability_pivot":    "[explain P or suggest a model]",\n'
+        '    "solvability_constraint": "[explain S]"\n'
         "  },\n"
-        '  "dfv_ready": true\n'
+        '  "tips_scores": {\n'
+        f'    "T": "{t_r}",\n'
+        f'    "I": "{i_r}",\n'
+        f'    "P": "{p_r}",\n'
+        f'    "S": "{s_r}"\n'
+        "  }\n"
         "}\n"
         "```"
     )
@@ -901,17 +859,13 @@ def _tips_force_final(
 
 class ValidationFlow(Flow[ValidationState]):
 
-    # ──────────────────────────────────────────────────────────
-    # STEP 1 — Collect initial idea
-    # ──────────────────────────────────────────────────────────
-
     @start()
     def collect_idea(self) -> str:
         section("ENTREPRENEURIAL OPPORTUNITY VALIDATOR")
         print(
-            "  Welcome! This tool guides you through a structured opportunity validation.\n\n"
-            "  Phase 1 — Define your problem clearly       (max 3 Q&A rounds)\n"
-            "  Phase 2 — Evaluate against TIPS framework   (max 4 Q&A rounds)\n\n"
+            f"  Welcome! This tool guides you through a structured opportunity validation.\n\n"
+            f"  Phase 1 — Define your problem clearly       (max {MAX_PROB_TURNS} Q&A rounds)\n"
+            f"  Phase 2 — Evaluate against TIPS framework   (max {MAX_TIPS_TURNS} Q&A rounds)\n\n"
             "  At the end you will receive a DFV-ready JSON report.\n"
         )
         hr()
@@ -920,10 +874,6 @@ class ValidationFlow(Flow[ValidationState]):
             "  (Rough is fine — we will sharpen it together):"
         )
         return self.state.raw_idea
-
-    # ──────────────────────────────────────────────────────────
-    # STEP 2 — Problem Definition: first agent pass
-    # ──────────────────────────────────────────────────────────
 
     @listen(collect_idea)
     def problem_definition_start(self, raw_idea: str) -> str:
@@ -942,19 +892,10 @@ class ValidationFlow(Flow[ValidationState]):
         self.state.prob_turns = 0
         return result
 
-    # ──────────────────────────────────────────────────────────
-    # STEP 3 — Problem Definition: iterative refinement loop
-    #
-    # Runs up to MAX_PROB_TURNS student answers.
-    # The LAST iteration always includes a STRUCTURED DEFINITION block.
-    # If the agent doesn't produce one anyway, a forced synthesis pass runs.
-    # ──────────────────────────────────────────────────────────
-
     @listen(problem_definition_start)
     def problem_definition_loop(self, first_response: str) -> str:
         report = first_response
 
-        # ── Interactive Q&A ────────────────────────────────────
         while self.state.prob_turns < MAX_PROB_TURNS and not is_defn_complete(report):
             agent_says(report)
 
@@ -982,12 +923,10 @@ class ValidationFlow(Flow[ValidationState]):
             self.state.prob_history.append({"role": "agent", "content": result})
             report = result
 
-        # ── Show the final loop response ───────────────────────
-        # (The last agent response is always un-shown at this point —
-        #  agent_says was called at the TOP of the loop, not after.)
+        # The final agent response is always un-shown here — show it now
         agent_says(report)
 
-        # ── Safety net: if no STRUCTURED DEFINITION found, force synthesis ─
+        # Safety net: if no STRUCTURED DEFINITION was produced, force synthesis
         all_agent_text = " ".join(
             t["content"] for t in self.state.prob_history if t["role"] == "agent"
         )
@@ -1005,14 +944,13 @@ class ValidationFlow(Flow[ValidationState]):
             self.state.prob_history.append({"role": "agent", "content": synthesis})
             agent_says(synthesis)
 
-        # ── Extract and store structured components ────────────
+        # Extract structured components (uses regex-based parser — FIX 3)
         defn = extract_structured_defn(self.state.prob_history)
         self.state.problem_statement = defn["problem_statement"] or self.state.raw_idea
         self.state.customer_segment  = defn["customer_segment"]
         self.state.consequence       = defn["consequence"]
         self.state.assumptions       = defn["assumptions"]
 
-        # ── Print confirmed definition ─────────────────────────
         section("PROBLEM DEFINITION — CONFIRMED")
         print(f"  Problem Statement : {self.state.problem_statement}")
         print(f"  Customer Segment  : {self.state.customer_segment  or '(not captured — will proceed)'}")
@@ -1021,10 +959,6 @@ class ValidationFlow(Flow[ValidationState]):
         hr()
 
         return self.state.problem_statement
-
-    # ──────────────────────────────────────────────────────────
-    # STEP 4 — Collect proposed solution (one-shot)
-    # ──────────────────────────────────────────────────────────
 
     @listen(problem_definition_loop)
     def collect_solution(self, _problem_statement: str) -> str:
@@ -1038,10 +972,6 @@ class ValidationFlow(Flow[ValidationState]):
             "  (rough concept is fine — just describe what you want to build):"
         )
         return self.state.proposed_solution
-
-    # ──────────────────────────────────────────────────────────
-    # STEP 5 — TIPS Evaluation: first agent pass
-    # ──────────────────────────────────────────────────────────
 
     @listen(collect_solution)
     def tips_evaluation_start(self, _solution: str) -> str:
@@ -1083,19 +1013,10 @@ class ValidationFlow(Flow[ValidationState]):
 
         return result
 
-    # ──────────────────────────────────────────────────────────
-    # STEP 6 — TIPS Evaluation: iterative refinement loop
-    #
-    # Runs up to MAX_TIPS_TURNS student answers.
-    # The LAST iteration always includes VERDICT: READY_FOR_DFV + FINAL JSON.
-    # If the agent doesn't produce them, a forced synthesis pass runs.
-    # ──────────────────────────────────────────────────────────
-
     @listen(tips_evaluation_start)
     def tips_loop(self, first_tips_response: str) -> str:
         report = first_tips_response
 
-        # ── Interactive Q&A ────────────────────────────────────
         while self.state.tips_turns < MAX_TIPS_TURNS and not is_tips_final(report):
             agent_says(report)
 
@@ -1133,7 +1054,6 @@ class ValidationFlow(Flow[ValidationState]):
             result = run_agent(task, _TIPS_AGENT)
             self.state.tips_history.append({"role": "agent", "content": result})
 
-            # Update ratings incrementally (only override if newly parsed)
             new_r = parse_tips_ratings(result)
             if new_r["T"]: self.state.timely_rating     = new_r["T"]
             if new_r["I"]: self.state.important_rating  = new_r["I"]
@@ -1143,10 +1063,8 @@ class ValidationFlow(Flow[ValidationState]):
             self.state.tips_report = result
             report = result
 
-        # ── Show the final loop response ───────────────────────
         agent_says(report)
 
-        # ── Safety net: if no final verdict, force it ──────────
         if not is_tips_final(report):
             print("\n  [Generating final TIPS report…]\n")
             current_ratings = {
@@ -1175,15 +1093,10 @@ class ValidationFlow(Flow[ValidationState]):
 
         return report
 
-    # ──────────────────────────────────────────────────────────
-    # STEP 7 — Final report
-    # ──────────────────────────────────────────────────────────
-
     @listen(tips_loop)
     def final_report(self, tips_result: str) -> dict:
         section("FINAL VALIDATION REPORT")
 
-        # ── Parse JSON from agent output; fall back to state ───
         final_json = extract_final_json(tips_result)
         if not final_json:
             cr = {
@@ -1193,43 +1106,22 @@ class ValidationFlow(Flow[ValidationState]):
                 "S": self.state.solvable_rating   or "YELLOW",
             }
             final_json = {
-                "structured_problem_definition": {
-                    "problem_statement": self.state.problem_statement,
+                "refined_idea": {
                     "customer_segment":  self.state.customer_segment  or "(not captured)",
+                    "qualified_problem": self.state.problem_statement,
                     "consequence":       self.state.consequence        or "(not captured)",
-                    "assumptions":       [a.strip() for a in self.state.assumptions.split(";") if a.strip()] or ["(not captured)"],
+                    "proposed_solution": self.state.proposed_solution or "To be defined in DFV phase",
                 },
-                "tips_analysis": {
-                    "timely": {
-                        "rating": cr["T"],
-                        "evidence": f"T rated {cr['T']} — see TIPS analysis above.",
-                        "gap": "See conversation history.",
-                        "coaching": "See TIPS analysis above.",
-                    },
-                    "important": {
-                        "rating": cr["I"],
-                        "evidence": f"I rated {cr['I']} — see TIPS analysis above.",
-                        "gap": "See conversation history.",
-                        "coaching": "See TIPS analysis above.",
-                    },
-                    "profitable": {
-                        "rating": cr["P"],
-                        "evidence": f"P rated {cr['P']} — see TIPS analysis above.",
-                        "gap": "See conversation history.",
-                        "coaching": "See TIPS analysis above.",
-                    },
-                    "solvable": {
-                        "rating": cr["S"],
-                        "evidence": f"S rated {cr['S']} — see TIPS analysis above.",
-                        "gap": "See conversation history.",
-                        "coaching": "See TIPS analysis above.",
-                    },
+                "tips_validated_metrics": {
+                    "timely_factor":          f"T rated {cr['T']} — see TIPS analysis above.",
+                    "importance_metric":      f"I rated {cr['I']} — see TIPS analysis above.",
+                    "profitability_pivot":    f"P rated {cr['P']} — see TIPS analysis above.",
+                    "solvability_constraint": f"S rated {cr['S']} — see TIPS analysis above.",
                 },
-                "dfv_ready": True,
+                "tips_scores": cr,
             }
         self.state.final_json = final_json
 
-        # ── TIPS Scorecard ─────────────────────────────────────
         icons = {"GREEN": "🟢", "YELLOW": "🟡", "RED": "🔴", "": "⚪"}
         hr("-")
         print("  TIPS SCORECARD")
@@ -1245,18 +1137,16 @@ class ValidationFlow(Flow[ValidationState]):
             print(f"    {icon}  {letter} — {name:<12}  :  {rating}")
         print()
 
-        # ── JSON output ────────────────────────────────────────
         hr("-")
         print("  DFV-READY JSON OUTPUT")
         hr("-")
         print(json.dumps(self.state.final_json, indent=2))
         hr("-")
 
-        # ── Sign-off ───────────────────────────────────────────
         section("READY FOR DESIGN-FOR-VALIDATION (DFV)")
         print(
             "  The JSON above is your structured input for the DFV stage.\n"
-            "  Carry the tips_analysis ratings into your validation experiment design:\n"
+            "  Carry the tips_scores ratings into your validation experiment design:\n"
             "    GREEN  → assumption confirmed; move forward\n"
             "    YELLOW → assumption likely; design a quick test to confirm\n"
             "    RED    → assumption unproven; design a focused experiment before building\n"

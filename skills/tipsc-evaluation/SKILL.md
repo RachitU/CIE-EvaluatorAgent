@@ -1,112 +1,147 @@
 ---
 name: tipsc-evaluation
-description: TIPSC opportunity evaluation framework with Need Validation and COP inference. Use when evaluating whether a problem represents a real entrepreneurial opportunity.
+description: >
+  TIPS opportunity evaluation framework with GREEN/YELLOW/RED scoring.
+  Reference document — not loaded at runtime in v2.
+  Used by the TIPS Evaluation Agent (Phase 2 of the validation pipeline).
 license: Apache-2.0
 compatibility: crewai>=0.1.0
 metadata:
   author: opportunity-validator
-  version: "1.0"
-allowed-tools: web-search
+  version: "2.0"
 ---
 
-## TIPSC Framework
+# TIPS Evaluation Framework
 
-Evaluate the problem against five criteria. Assign **Strong / Weak / Unclear** to each.
+> **v2 note:** C (Context) is intentionally excluded from live scoring in this
+> version. The framework is referred to as TIPS throughout, not TIPSC.
+> Context will be reintroduced in a future version once the C assessment
+> methodology is finalised.
 
-**T — Timely**: Is the problem relevant and worth solving now?
-- Long-standing problems can still be Timely if unsolved, growing, or newly enabled by technology.
+---
+
+## TIPS Criteria
+
+Evaluate the problem against four criteria. Assign **GREEN / YELLOW / RED**.
+
+**T — Timely** : Is the problem relevant and worth solving now?
+- Long-standing problems can still be Timely if they are unsolved, growing,
+  or newly enabled by technology.
 - TIMELY DOES NOT MEAN NEW.
+- Assess the time horizon explicitly stated by the student.
 
-**I — Important**: Is the pain real, frequent, and severe? Do people actively want this solved?
+**I — Important** : Is the pain real, frequent, and severe?
+- Do people actively want this solved?
+- Is the consequence direct and measurable, or vague and indirect?
+- Distinguish between Must Have, Should Have, and Nice to Have.
 
-**P — Profitable**: Does solving this create meaningful value?
-- DO NOT require pricing, revenue projections, TAM/SAM/SOM, CAC, or LTV.
-- Mark UNCLEAR if commercial viability is unknown.
-- A problem indicates profitability when customers lose time, money, or experience measurable pain.
-- Do not assign Weak solely because revenue evidence is unavailable.
+**P — Profitable** : Does solving this create meaningful value that someone will pay for?
+- DO NOT require pricing projections, TAM/SAM/SOM, CAC, or LTV at this stage.
+- A problem indicates profitability when customers lose time, money, or
+  experience measurable pain that they would pay to avoid.
+- Assess whether a plausible named payment model exists (B2B, subscription,
+  one-time fee, B2B2C, freemium, etc.).
 
-**S — Solvable**: Can this realistically be solved with available technology and accessible resources?
+**S — Solvable** : Can this team realistically build it with available resources?
+- Assess skills, domain knowledge, data access, and compute.
+- A single clearly identified gap = YELLOW. Multiple gaps = RED.
 
-**C — Contextual**: Does this fit the regulatory, cultural, and socio-economic environment?
+---
 
-### TIPS Rating Guidance
+## Scoring Rubric
 
-Use GREEN / YELLOW / RED for the final analysis and coaching.
+```
+T — TIMELY
+  GREEN  : Active daily/weekly problem  OR  time horizon ≤ 6 months
+  YELLOW : Time horizon 6 months – 1 year
+  RED    : Horizon > 1 year, undefined, or hazy
 
-- GREEN means the criterion is supported by explicit founder evidence.
-- YELLOW means the criterion is plausible but incomplete or time-horizon dependent.
-- RED means the criterion is weak, unproven, or contradicted by the conversation.
+I — IMPORTANT
+  GREEN  : Explicitly "Must Have" + direct, measurable consequence
+  YELLOW : "Should Have"  OR  consequence is indirect or vague
+  RED    : "Nice to Have"  OR  consequence is trivial / not stated
 
-For this project, ignore C (Context) in the live scoring and focus on T, I, P, and S.
+P — PROFITABLE
+  GREEN  : Clear YES to paying + plausible named model identified
+  YELLOW : Possibly yes, but model undefined or only indirect
+  RED    : No willingness to pay; no monetisation path identified
 
-### TIPSC Process
-1. First pass: assign Strong / Weak / Unclear to every criterion.
-2. Skip criteria marked Strong — do not revisit them.
-3. Investigate Weak and Unclear criteria ONE AT A TIME, in priority order.
-4. Ask exactly ONE focused question per turn.
-5. After each response: mark resolved, accept as known risk, or continue probing.
-6. Move to the next criterion only after the current one is resolved.
-7. After two follow-up questions on a criterion, close it regardless.
-8. After 3–4 student answers total, force a final structured handoff and stop the chat.
+S — SOLVABLE
+  GREEN  : Team has the skills, data, compute, and domain knowledge for MVP
+  YELLOW : Can build a basic version but ONE clear gap exists
+  RED    : Significant skill, data, or resource gaps; not feasible as stated
+```
 
-## Need Validation Framework
-
-After all TIPSC criteria are resolved, validate the need. Confirm all five:
-
-1. A specific customer group is identified.
-2. Problem frequency is identified.
-3. Consequence is identified.
-4. Existing alternatives are identified.
-5. Why alternatives fail is identified.
-
-Once all five are present: **Need Validation = COMPLETE**. Do not ask additional Need questions.
-
-The final handoff must be structured and must include the problem statement,
-customer segment, consequence, assumptions, and per-criterion TIPS evidence,
-gaps, and coaching notes.
-
-## COP Assessment (Inferred Naturally)
-
-DO NOT run COP as a separate interview. Infer organically from the TIPSC and Need conversation.
-- **C — Capability**: Does the founder have or can acquire required skills?
-- **O — Opportunity**: Does the founder have real access to this market?
-- **P — Passion**: Is the founder genuinely motivated, not just trend-chasing?
-
-Your questions about the problem should simultaneously reveal COP.
-
-## Approval Rules
-
-Approve **only** when:
-1. All TIPSC criteria are Strong or accepted as known risks.
-2. Need is confirmed with real evidence (all five points above).
-3. COP has been assessed organically.
+---
 
 ## Evidence Standards
 
-This is early-stage validation — NOT academic research. Reasonable estimates and real-world examples ARE sufficient.
+This is early-stage validation — not academic research. Reasonable estimates
+and real-world examples from the student ARE sufficient.
 
-A criterion is sufficiently answered when the founder has provided:
-- A reasonable estimate of who is affected and how many
-- A realistic description of how often the problem occurs
-- At least one concrete example of the problem
-- A plausible reason why existing solutions fall short
+A criterion is **sufficiently answered** when the student has provided:
+- A named or clearly described customer group
+- A specific pain or problem statement
+- Frequency or time horizon of the problem
+- Consequence if unsolved (quantified where possible)
 
-**Minimum founder evidence before assigning Strong:**
-- Specific customer group
-- Specific pain/problem
-- Frequency
-- Consequence
+**Student evidence overrides search results.**
+A criterion cannot be marked GREEN based solely on search findings.
+Do not project founder-specific capabilities from generic market data.
 
-If any are missing, assign Unclear and ask a follow-up.
+---
 
-**Founder evidence overrides search.** A criterion cannot be marked Strong based only on search findings. Do not assume founder-specific evidence from generic market statistics.
+## Process Rules
 
-## Question Rules
+1. First pass: score all four criteria T, I, P, S simultaneously.
+2. Ask ONE focused question targeting the weakest criterion (first RED, then YELLOW).
+3. After each student response: update affected ratings, then ask the next question.
+4. After `max_tips_turns` student answers (set in `config/settings.yaml`),
+   emit the final verdict regardless of remaining YELLOW ratings.
+5. Never ask more than two questions about the same criterion.
+6. Never ask about: TAM, SAM, SOM, pricing projections, CAC, LTV — unless
+   the student introduced those terms themselves.
 
-- Ask at most ONE question per turn.
-- Never investigate more than one criterion at a time.
-- Never revisit a criterion already marked Strong.
-- Never ask the same question twice (repetition is a validation error).
-- Never ask about: TAM, SAM, SOM, pricing, revenue projections, CAC, LTV — unless the founder introduced them.
-- Do not demand more precision than a founder can reasonably have at this stage.
-- On the final turn, do not ask another question. Emit the structured handoff and terminate the conversation.
+---
+
+## Coaching Rules
+
+For every YELLOW or RED criterion, provide exactly ONE coaching suggestion:
+- Be concrete and actionable, not general ("define a B2B model" not "think about revenue")
+- Reference what the student actually said
+- A good coaching note changes a YELLOW to GREEN in one follow-up answer
+
+---
+
+## Final Output
+
+The final TIPS report must include:
+- Updated GREEN/YELLOW/RED for all four criteria with evidence
+- `VERDICT: READY_FOR_DFV`
+- Structured JSON matching this schema exactly:
+
+```json
+{
+  "refined_idea": {
+    "customer_segment":  "...",
+    "qualified_problem": "...",
+    "consequence":       "...",
+    "proposed_solution": "..."
+  },
+  "tips_validated_metrics": {
+    "timely_factor":          "...",
+    "importance_metric":      "...",
+    "profitability_pivot":    "...",
+    "solvability_constraint": "..."
+  },
+  "tips_scores": {
+    "T": "GREEN|YELLOW|RED",
+    "I": "GREEN|YELLOW|RED",
+    "P": "GREEN|YELLOW|RED",
+    "S": "GREEN|YELLOW|RED"
+  }
+}
+```
+
+The `tips_validated_metrics` fields must each be one sentence of real evidence
+from the conversation — not generic descriptions of the criterion.
