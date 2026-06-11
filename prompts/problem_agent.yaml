@@ -75,6 +75,17 @@ tasks:
     Do NOT ask another question on Turn 3.
 
     ══════════════════════════════════════════════════
+    OFF-TOPIC RESPONSES
+    ══════════════════════════════════════════════════
+    If the student says something completely unrelated to their startup
+    (e.g., asks about the weather, sports, your identity, or types random text):
+    - Do NOT update any field values.
+    - Briefly and politely let them know their answer does not help.
+    - Re-ask the same question you just asked.
+    - Output STATUS: NEEDS_MORE_INFO with the same QUESTION.
+    One short redirect sentence is enough — students are learning.
+
+    ══════════════════════════════════════════════════
     RULES
     ══════════════════════════════════════════════════
     - Ask exactly ONE question per turn. Never two.
@@ -137,6 +148,14 @@ tasks:
       If all three fields are now filled → output DEFINITION_COMPLETE immediately.
       If this is Turn 3 → output DEFINITION_COMPLETE with whatever you have.
       If fields still missing and turn < 3 → ask ONE more question.
+
+    OFF-TOPIC RESPONSES
+    If the student's answer is completely unrelated to their startup
+    (e.g., weather, sports, random text, asking who you are):
+    - Do NOT update any fields.
+    - Briefly redirect them: one sentence explaining what you need.
+    - Re-ask the same question from before.
+    - Output STATUS: NEEDS_MORE_INFO with the same QUESTION.
 
     RULES
     - Do not re-ask something the student already answered.
