@@ -38,19 +38,19 @@ Two-Phase Pipeline with hard iteration caps for local LLM stability.
 Output JSON schema
 ──────────────────
 {
-  "refined_idea": {
-    "customer_segment":   "...",
-    "qualified_problem":  "...",
-    "consequence":        "...",
-    "proposed_solution":  "..."
-  },
-  "tips_validated_metrics": {
-    "timely_factor":          "...",
-    "importance_metric":      "...",
-    "profitability_pivot":    "...",
-    "solvability_constraint": "..."
-  },
-  "tips_scores": { "T": "...", "I": "...", "P": "...", "S": "..." }
+    "structured_problem_definition": {
+        "problem_statement": "...",
+        "customer_segment": "...",
+        "consequence": "...",
+        "assumptions": ["...", "..."]
+    },
+    "tips_analysis": {
+        "timely": {"rating": "GREEN|YELLOW|RED", "evidence": "...", "gap": "...", "coaching": "..."},
+        "important": {"rating": "GREEN|YELLOW|RED", "evidence": "...", "gap": "...", "coaching": "..."},
+        "profitable": {"rating": "GREEN|YELLOW|RED", "evidence": "...", "gap": "...", "coaching": "..."},
+        "solvable": {"rating": "GREEN|YELLOW|RED", "evidence": "...", "gap": "...", "coaching": "..."}
+    },
+    "dfv_ready": true
 }
 """
 
@@ -664,7 +664,7 @@ STRUCTURED DEFINITION:
   Problem Statement : [concise, specific synthesis of the core problem]
   Customer Segment  : [the specific named group who experiences the problem]
   Consequence       : [quantified or clearly described negative outcome]
-  Assumptions       : [comma-separated list of key assumptions]\
+    Assumptions       : [comma-separated list of key assumptions]\
 """
 
 
@@ -679,6 +679,8 @@ def _tips_first_pass(
     return f"""\
 You are evaluating a student startup opportunity using the TIPS framework.
 C (Context) is IGNORED in this phase. Score T, I, P, and S only.
+Your job is to coach the student toward a clearer problem definition and a final
+DFV-ready handoff, not to keep the conversation open-ended.
 
 Student's structured problem definition:
   Problem Statement : {problem_statement}
@@ -693,10 +695,10 @@ Score each criterion based ONLY on what the student has actually stated.
 Never assume information they have not given you.
 
 SCORING RULES (repeat for your own reference):
-T — TIMELY:     GREEN if ≤6-month horizon or active daily problem | YELLOW if 6–12mo | RED if >12mo or unclear
-I — IMPORTANT:  GREEN if Must Have + measurable consequence | YELLOW if indirect/vague | RED if Nice to Have
-P — PROFITABLE: GREEN if customer clearly willing to pay + model named | YELLOW if possible | RED if no
-S — SOLVABLE:   GREEN if team has full MVP capability | YELLOW if one gap | RED if major gaps
+T — TIMELY:     GREEN if ≤6-month horizon or active daily problem | YELLOW if 6–12mo or medium-term | RED if >12mo, undefined, or hazy
+I — IMPORTANT:  GREEN if Must Have + direct consequence | YELLOW if Should Have or direct but moderate | RED if Nice to Have or trivial
+P — PROFITABLE: GREEN if customer clearly willing to pay or a credible payment path exists | YELLOW if maybe, but unclear | RED if no willingness to pay
+S — SOLVABLE:   GREEN if team has the skills, data, compute, and resources for an MVP | YELLOW if one clear gap exists | RED if major capability/resource gaps
 
 Write your response in EXACTLY this format:
 
@@ -749,6 +751,7 @@ def _tips_followup(
     ps_e  = problem_statement.replace('"', "'")
     cs_e  = customer_segment.replace('"', "'") or "(not captured)"
     con_e = consequence.replace('"', "'")       or "(not captured)"
+    ass_e = assumptions.replace('"', "'; '") if assumptions else "(not captured)"
     sol_e = (proposed_solution or "To be defined in DFV phase").replace('"', "'")
     t_r   = current_ratings.get("T", "YELLOW")
     i_r   = current_ratings.get("I", "YELLOW")
@@ -760,24 +763,39 @@ def _tips_followup(
         "FINAL JSON:\n"
         "```json\n"
         "{\n"
-        '  "refined_idea": {\n'
+        '  "structured_problem_definition": {\n'
+        f'    "problem_statement": "{ps_e}",\n'
         f'    "customer_segment": "{cs_e}",\n'
-        f'    "qualified_problem": "{ps_e}",\n'
         f'    "consequence": "{con_e}",\n'
-        f'    "proposed_solution": "{sol_e}"\n'
+        f'    "assumptions": ["{ass_e}"]\n'
         "  },\n"
-        '  "tips_validated_metrics": {\n'
-        '    "timely_factor":          "[one sentence explaining T rating and time horizon evidence]",\n'
-        '    "importance_metric":      "[one sentence explaining I rating and consequence severity]",\n'
-        '    "profitability_pivot":    "[one sentence explaining P rating or the payment model to pursue]",\n'
-        '    "solvability_constraint": "[one sentence on S rating and the key resource gap if any]"\n'
+        '  "tips_analysis": {\n'
+        '    "timely": {\n'
+        f'      "rating": "{t_r}",\n'
+        '      "evidence": "[one sentence explaining T rating and time horizon evidence]",\n'
+        '      "gap": "[what is still unclear about timing]",\n'
+        '      "coaching": "[one concrete coaching suggestion]"\n'
+        '    },\n'
+        '    "important": {\n'
+        f'      "rating": "{i_r}",\n'
+        '      "evidence": "[one sentence explaining I rating and consequence severity]",\n'
+        '      "gap": "[what is still unclear about importance]",\n'
+        '      "coaching": "[one concrete coaching suggestion]"\n'
+        '    },\n'
+        '    "profitable": {\n'
+        f'      "rating": "{p_r}",\n'
+        '      "evidence": "[one sentence explaining P rating or the payment model to pursue]",\n'
+        '      "gap": "[what is still unclear about willingness to pay]",\n'
+        '      "coaching": "[one concrete coaching suggestion]"\n'
+        '    },\n'
+        '    "solvable": {\n'
+        f'      "rating": "{s_r}",\n'
+        '      "evidence": "[one sentence on S rating and the key resource gap if any]",\n'
+        '      "gap": "[what is still unclear about solvability]",\n'
+        '      "coaching": "[one concrete coaching suggestion]"\n'
+        '    }\n'
         "  },\n"
-        '  "tips_scores": {\n'
-        f'    "T": "[use your updated T rating above]",\n'
-        f'    "I": "[use your updated I rating above]",\n'
-        f'    "P": "[use your updated P rating above]",\n'
-        f'    "S": "[use your updated S rating above]"\n'
-        "  }\n"
+        '  "dfv_ready": true\n'
         "}\n"
         "```"
     ) if is_last else ""
@@ -836,6 +854,7 @@ def _tips_force_final(
     ps_e  = problem_statement.replace('"', "'")
     cs_e  = customer_segment.replace('"', "'")   or "(not captured)"
     con_e = consequence.replace('"', "'")         or "(not captured)"
+    ass_e = "(not captured)"
     sol_e = (proposed_solution or "To be defined in DFV phase").replace('"', "'")
 
     return (
@@ -858,24 +877,19 @@ def _tips_force_final(
         "FINAL JSON:\n"
         "```json\n"
         "{\n"
-        '  "refined_idea": {\n'
+        '  "structured_problem_definition": {\n'
+        f'    "problem_statement": "{ps_e}",\n'
         f'    "customer_segment": "{cs_e}",\n'
-        f'    "qualified_problem": "{ps_e}",\n'
         f'    "consequence": "{con_e}",\n'
-        f'    "proposed_solution": "{sol_e}"\n'
+        f'    "assumptions": ["{ass_e}"]\n'
         "  },\n"
-        '  "tips_validated_metrics": {\n'
-        '    "timely_factor":          "[explain T]",\n'
-        '    "importance_metric":      "[explain I]",\n'
-        '    "profitability_pivot":    "[explain P or suggest a model]",\n'
-        '    "solvability_constraint": "[explain S]"\n'
+        '  "tips_analysis": {\n'
+        '    "timely": {"rating": "'+t_r+'", "evidence": "[explain T]", "gap": "[gap]", "coaching": "[coaching]"},\n'
+        '    "important": {"rating": "'+i_r+'", "evidence": "[explain I]", "gap": "[gap]", "coaching": "[coaching]"},\n'
+        '    "profitable": {"rating": "'+p_r+'", "evidence": "[explain P or suggest a model]", "gap": "[gap]", "coaching": "[coaching]"},\n'
+        '    "solvable": {"rating": "'+s_r+'", "evidence": "[explain S]", "gap": "[gap]", "coaching": "[coaching]"}\n'
         "  },\n"
-        '  "tips_scores": {\n'
-        f'    "T": "{t_r}",\n'
-        f'    "I": "{i_r}",\n'
-        f'    "P": "{p_r}",\n'
-        f'    "S": "{s_r}"\n'
-        "  }\n"
+        '  "dfv_ready": true\n'
         "}\n"
         "```"
     )
@@ -1179,19 +1193,39 @@ class ValidationFlow(Flow[ValidationState]):
                 "S": self.state.solvable_rating   or "YELLOW",
             }
             final_json = {
-                "refined_idea": {
+                "structured_problem_definition": {
+                    "problem_statement": self.state.problem_statement,
                     "customer_segment":  self.state.customer_segment  or "(not captured)",
-                    "qualified_problem": self.state.problem_statement,
                     "consequence":       self.state.consequence        or "(not captured)",
-                    "proposed_solution": self.state.proposed_solution or "To be defined in DFV phase",
+                    "assumptions":       [a.strip() for a in self.state.assumptions.split(";") if a.strip()] or ["(not captured)"],
                 },
-                "tips_validated_metrics": {
-                    "timely_factor":          f"T rated {cr['T']} — see TIPS analysis above.",
-                    "importance_metric":      f"I rated {cr['I']} — see TIPS analysis above.",
-                    "profitability_pivot":    f"P rated {cr['P']} — see TIPS analysis above.",
-                    "solvability_constraint": f"S rated {cr['S']} — see TIPS analysis above.",
+                "tips_analysis": {
+                    "timely": {
+                        "rating": cr["T"],
+                        "evidence": f"T rated {cr['T']} — see TIPS analysis above.",
+                        "gap": "See conversation history.",
+                        "coaching": "See TIPS analysis above.",
+                    },
+                    "important": {
+                        "rating": cr["I"],
+                        "evidence": f"I rated {cr['I']} — see TIPS analysis above.",
+                        "gap": "See conversation history.",
+                        "coaching": "See TIPS analysis above.",
+                    },
+                    "profitable": {
+                        "rating": cr["P"],
+                        "evidence": f"P rated {cr['P']} — see TIPS analysis above.",
+                        "gap": "See conversation history.",
+                        "coaching": "See TIPS analysis above.",
+                    },
+                    "solvable": {
+                        "rating": cr["S"],
+                        "evidence": f"S rated {cr['S']} — see TIPS analysis above.",
+                        "gap": "See conversation history.",
+                        "coaching": "See TIPS analysis above.",
+                    },
                 },
-                "tips_scores": cr,
+                "dfv_ready": True,
             }
         self.state.final_json = final_json
 
@@ -1222,7 +1256,7 @@ class ValidationFlow(Flow[ValidationState]):
         section("READY FOR DESIGN-FOR-VALIDATION (DFV)")
         print(
             "  The JSON above is your structured input for the DFV stage.\n"
-            "  Carry the tips_scores ratings into your validation experiment design:\n"
+            "  Carry the tips_analysis ratings into your validation experiment design:\n"
             "    GREEN  → assumption confirmed; move forward\n"
             "    YELLOW → assumption likely; design a quick test to confirm\n"
             "    RED    → assumption unproven; design a focused experiment before building\n"
