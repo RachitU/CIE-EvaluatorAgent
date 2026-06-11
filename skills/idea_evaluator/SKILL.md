@@ -1,5 +1,5 @@
 ---
-name: idea-evaluator
+name: idea-evaluator #rename folder to match name
 description: Quick sanity check on a proposed solution against a validated problem. Approves clear reasonable ideas, asks up to 3 clarifying questions for vague ones, flags broken ones. Does not evaluate desirability, feasibility, or viability.
 license: Apache-2.0
 compatibility: crewai>=0.1.0
