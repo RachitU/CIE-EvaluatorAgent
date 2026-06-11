@@ -6,14 +6,15 @@ startup:
   intro: |
     This system helps you validate your startup idea in three stages.
 
-    STAGE 1 — Problem Definition
-      Clarify: Problem · Customer · Consequence · Assumptions
+    STAGE 1 — Problem Definition  (max 3 questions)
+      Identify: Customer · Consequence · Assumptions
 
-    STAGE 2 — TIPS Evaluation
+    STAGE 2 — TIPS Evaluation  (C excluded)
       T (Timely) · I (Important) · P (Profitable) · S (Solvable)
+      Produces a refined problem statement + strength/gaps analysis.
 
     STAGE 3 — Idea Check
-      Quick sanity check on your proposed solution
+      Validate your solution and produce structured output for DFV.
 
   search_enabled:  "  ✓  Web search enabled — results will be injected as live context"
   search_disabled: "  ⚠  SERPER_API_KEY not set — agents will evaluate without web data"
