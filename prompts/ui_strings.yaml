@@ -4,99 +4,101 @@
 
 startup:
   intro: |
-    This system determines whether your problem is worth solving
-    and whether your proposed solution is a valid response.
+    This system validates your entrepreneurial opportunity in three phases.
 
-    PHASE 1 — Opportunity Evaluation
-      TIPSC  (Timely · Important · Profitable · Solvable · Contextual)
-      Need Validation
-     
+    PHASE 1 — Problem Structuring
+      Coach you to define: Customer · Problem · Consequence · Assumptions
 
-    PHASE 2 — Idea Evaluation
+    PHASE 2 — TIPSC Evaluation
+      Timely · Important · Profitable · Solvable · Contextual
+
+    PHASE 3 — Idea Evaluation
       PSEA   (Problem-Solution Fit · Simplicity · Ethics · Assumptions)
-      Initial Feasibility
 
   search_enabled:  "  ✓  Web search enabled — results will be injected as live context"
   search_disabled: "  ⚠  SERPER_API_KEY not set — agents will evaluate without web data"
 
 phases:
-  opportunity_header: "PHASE 1 — OPPORTUNITY EVALUATION"
+  problem_header:      "PHASE 1 — PROBLEM STRUCTURING"
+  problem_running:     "  Coaching your problem definition...\n"
+  opportunity_header:  "PHASE 2 — TIPSC EVALUATION"
   opportunity_running: "  Running TIPSC triage...\n"
-  idea_header:         "PHASE 2 — IDEA EVALUATION"
+  idea_header:         "PHASE 3 — IDEA EVALUATION"
   idea_running:        "  Running PSEA evaluation...\n"
 
 transitions:
+  problem_complete: |
+    Problem definition structured. Moving to TIPSC Evaluation.
   opportunity_approved: |
-    Your opportunity has been validated. Well done.
+    TIPSC Evaluation complete. Well done.
     Now describe the solution you propose to build.
   final_status: |
-    Both opportunity and solution have passed validation.
+    All phases complete. Your DFV package is ready.
     Proceed to Desirability, Feasibility, and Viability (DFV) analysis.
 
 prompts:
-  problem_input:  "Describe the problem you want to solve:"
+  problem_input:  "Describe the problem your team wants to solve (any format — we will help structure it):"
   solution_input: "Describe your proposed solution:"
   response_input: "Your response:"
 
 agent_display:
-  asking_label:   "AGENT IS ASKING:"
+  asking_label:      "AGENT IS ASKING:"
   fallback_question: "Please share more information to continue the evaluation."
 
 section_titles:
   main:       "ENTREPRENEURIAL OPPORTUNITY VALIDATION SYSTEM"
-  opp_valid:  "OPPORTUNITY VALIDATED"
-  final:      "VALIDATION COMPLETE — FINAL REPORT"
+  prob_done:  "PROBLEM DEFINITION STRUCTURED"
+  opp_valid:  "TIPSC EVALUATION COMPLETE"
+  idea_valid: "IDEA EVALUATION COMPLETE"
+  final:      "VALIDATION COMPLETE — DFV PACKAGE READY"
   dfv_ready:  "STATUS: READY FOR DFV EVALUATION"
 
 report_labels:
-  problem:     "PROBLEM STATEMENT"
-  opportunity: "OPPORTUNITY EVALUATION"
+  problem:     "STRUCTURED PROBLEM DEFINITION"
+  opportunity: "TIPSC EVALUATION"
   solution:    "PROPOSED SOLUTION"
-  idea:        "IDEA EVALUATION"
+  idea:        "IDEA EVALUATION (PSEA)"
+  json_output: "DFV JSON OUTPUT"
 
 force_close_template: |
   ⚠ MANDATORY OVERRIDE — CRITERION MUST CLOSE NOW
 
-  You have spent {turns} turns investigating {name} ({criterion}).
+  You have spent {turns} turns coaching {name} ({criterion}).
 
-  The founder has already provided reasonable evidence.
+  The team has provided their best available answer.
 
-  Perfect certainty is NOT required at this stage.
+  Perfect certainty is NOT required at this stage — students are learning.
 
   YOU MUST:
 
-    1. Accept the founder's evidence as sufficient.
-    2. Assign:
-       - Strong
-       - Weak
-       - Unclear
-       - Accepted Risk
-    3. Close this criterion immediately.
-    4. Move to the next unresolved criterion.
-    5. Do NOT ask another question about this criterion.
+    1. Accept the team's answer as sufficient for now.
+    2. Assign: 🟢 Green / 🟡 Yellow / 🔴 Red (Red is okay — it is not a rejection)
+    3. Output: VERDICT UPDATE: {criterion} — {name}: [color]
+    4. Output: CRITERION SUMMARY: [one sentence]
+    5. Close this criterion immediately. Do NOT ask another question.
 
-  Continuing to investigate this criterion is a validation error.
+  Continuing to probe this criterion is a coaching error.
 
 repetition_warning: |
   ⚠ WARNING: You are repeating yourself.
 
   Do NOT ask another variation of the same question.
 
-  If the founder has already provided a reasonable answer:
+  If the team has already provided a reasonable answer:
 
     1. Accept the answer.
-    2. Assign Strong, Weak, Unclear, or Accepted Risk.
-    3. Close the criterion.
-    4. Move to the next unresolved criterion.
+    2. Assign 🟢 Green, 🟡 Yellow, or 🔴 Red.
+    3. Output VERDICT UPDATE and CRITERION SUMMARY.
+    4. Close the criterion and move on.
 
-  Repeated questioning is a validation error.
-  
+  Repeated questioning is a coaching error.
+
 web_context:
   header:    "WEB SEARCH CONTEXT  [{label}]  (fetched {date})"
   separator: "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   footer: |
     Use the search data above to ground your evaluation in current
     real-world evidence. Reference specific findings in your response.
-  no_results:  "  (no results found)"
+  no_results:  "  [No results found on Google. The search tool is working perfectly, but this query yielded zero articles. This implies a highly niche problem, lack of established market, or lack of data.]"
   search_off:  "  (web search not configured)"
   error:       "  (search error: {error})"

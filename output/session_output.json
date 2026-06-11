@@ -1,0 +1,16 @@
+{
+  "refined_idea": {
+    "customer_segment": "3rd and 4th-year computer science engineering students at PES University applying for entry-level software engineering internships.",
+    "qualified_problem": "They struggle to map their academic project experience to ATS keywords required by job descriptions, leading to automated rejection.",
+    "consequence": "An average of 95% rejection rate before human review, resulting in hundreds of wasted hours and missed career opportunities.",
+    "assumptions": "That ATS keyword mapping is the primary reason for rejections and that hiring managers rely on ATS filtering for entry-level internships.",
+    "proposed_solution": "We are building a lightweight web application that takes a student's resume PDF and a target job description URL as input. It uses a fine-tuned local NLP model (ensuring 100% data privacy and zero API data leakage) to cross-reference the student's academic projects with the exact ATS keywords required by the job. It then outputs a tailored list of suggested bullet-point rewrites. It is extremely simple: no complex dashboards, just a single upload screen. We are not generating fake experience, only optimizing the phrasing of existing truthful academic work, ensuring complete ethical compliance."
+  },
+  "tips_validated_metrics": {
+    "timely_factor": "Timely: Yellow. The team has internal validation of demand but needs external evidence to confirm the problem’s current relevance in the broader market.",
+    "importance_metric": "Important: Green. Important: 🟢 Green — A high rejection rate due to ATS mismatches directly impacts students’ career opportunities, making it a critical problem.",
+    "profitability_pivot": "Profitable: Yellow. The team identifies a potential profitable opportunity but lacks external validation of market demand and competition beyond their internal beta test.",
+    "solvability_constraint": "Solvable: Green. Solvable: 🟢 Green — The team can develop a keyword-mapping tool, but needs to validate if this is a real pain point and how to scale it beyond PES University.",
+    "contextual_note": "Contextual: Not rated."
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "refined_idea": {
+    "customer_segment": "Local homemakers",
+    "qualified_problem": "Inability to consistently provide 10-15 meals daily for tech workers due to lack of a platform to connect providers with demand",
+    "consequence": "Tech workers face inconsistent meal availability, leading to lower satisfaction and potential health impacts",
+    "assumptions": "Homemakers have the capacity and desire to cook 10-15 meals daily and the desire to monetize their kitchens to serve these tech workers. (approximate — to be refined)",
+    "proposed_solution": "A hyper-local marketplace app. Customers subscribe to a weekly meal plan from a specific home chef in their 5km radius. We handle the payments and provide standardized eco-friendly packaging, while third-party logistics partners handle the daily lunch delivery at exactly 1 PM."
+  },
+  "tips_validated_metrics": {
+    "timely_factor": "Timely: Yellow. The team identified a growing meal prep market but lacks direct evidence linking it to the specific challenge of homemakers providing consistent meals for tech workers.",
+    "importance_metric": "Important: Not rated.",
+    "profitability_pivot": "Profitable: Yellow. The team has partial evidence of profitability through pilot data but lacks specific validation for market share feasibility and pricing models.",
+    "solvability_constraint": "Solvable: Yellow. The team has a clear pricing model and pilot proof of concept but lacks specific evidence on the feasibility of their solution in the current market context.",
+    "contextual_note": "Contextual: Yellow. The team has a plausible onboarding strategy but lacks evidence to confirm homemakers’ capacity and desire to participate in the model."
+  }
+}

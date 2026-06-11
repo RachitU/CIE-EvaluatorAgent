@@ -3,7 +3,7 @@
 # ─────────────────────────────────────────────
 
 llm:
-  model: "openai/bonsai-8b"
+  model: "openai/qwen/qwen3-4b"
   base_url: "http://localhost:1234/v1"
   api_key: "lm-studio"
 
@@ -17,6 +17,8 @@ search:
   # Free key (2,500 searches/month): https://serper.dev
   # Preferred: set via env var SERPER_API_KEY
   # Fallback: hardcode here (not recommended for shared repos)
+  # ⚠ Previous key expired (HTTP 403). Get a new free key at https://serper.dev
+  # Then paste it here or set SERPER_API_KEY env var.
   serper_api_key: "8b1f23fdd635ed883fc9c7a2e9a0b3ff48cb26" # leave blank to use SERPER_API_KEY env var
   results_per_query: 4
   timeout_seconds: 8
@@ -28,7 +30,7 @@ conversation:
 
 validation:
   # Maximum turns on a single TIPSC criterion before forcing a verdict.
-  max_turns_per_criterion: 3
+  max_turns_per_criterion: 2
 
 display:
   console_width: 62
