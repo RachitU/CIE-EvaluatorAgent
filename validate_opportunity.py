@@ -40,6 +40,7 @@ from typing import List
 from pydantic import BaseModel
 from crewai import Agent, Task, Crew, Process, LLM
 from crewai.flow.flow import Flow, listen, start
+# Note: do NOT import Memory — automatic memory needs no manual imports
 
 
 # ══════════════════════════════════════════════════════════════
@@ -82,6 +83,22 @@ llm = LLM(
     model=llm_cfg["model"],
     base_url=llm_cfg["base_url"],
     api_key=llm_cfg["api_key"],
+)
+
+# ── Embedder config for CrewAI automatic memory ───────────────
+# Passed to every Crew() call so all memory types use the same
+# local embedder. No OpenAI key required.
+_mem_cfg = cfg.get("memory", {})
+_EMBEDDER_CONFIG = {
+    "provider": _mem_cfg.get("embedder_provider", "huggingface"),
+    "config": {
+        "model_name": _mem_cfg.get("embedder_model", "all-MiniLM-L6-v2"),
+    },
+}
+print("DEBUG EMBEDDER CONFIG:", _EMBEDDER_CONFIG)
+
+_MEMORY_STORAGE_PATH = str(
+    BASE_DIR / _mem_cfg.get("storage_path", ".crewai/memory")
 )
 
 _serper_key = (
@@ -262,12 +279,41 @@ def clean_agent_output(text: str) -> str:
 
 
 def run_agent(task: Task, agent: Agent) -> str:
+    """
+    Single-task crew run WITHOUT memory.
+    Used for multi-turn loops where we manage context ourselves
+    via prompt injection (format_history, last_exchange, etc).
+    Memory=False here because these are mid-conversation turns —
+    injecting CrewAI memory mid-loop causes context duplication.
+    """
     crew = Crew(
         agents=[agent],
         tasks=[task],
         process=Process.sequential,
         verbose=False,
         memory=False,
+    )
+    raw = str(crew.kickoff())
+    return clean_agent_output(raw)
+
+
+def run_agent_with_memory(task: Task, agent: Agent) -> str:
+    """
+    Single-task crew run WITH CrewAI automatic memory.
+    Used for the FIRST call of each stage — triage, initial eval,
+    and final idea check. CrewAI automatically:
+      - Searches long-term memory for relevant past context
+      - Injects it into the task before the agent sees it
+      - Stores the result for future runs
+    This is where cross-run learning happens.
+    """
+    crew = Crew(
+        agents=[agent],
+        tasks=[task],
+        process=Process.sequential,
+        verbose=True,
+        memory=True,                      # ← automatic memory ON
+        embedder=_EMBEDDER_CONFIG,        # ← local HuggingFace embedder
     )
     raw = str(crew.kickoff())
     return clean_agent_output(raw)
@@ -685,7 +731,7 @@ class ValidationFlow(Flow[ValidationState]):
                 ),
                 agent=problem_agent,
             )
-            report = run_agent(task, problem_agent)
+            report = run_agent_with_memory(task, problem_agent)   # ← changed
             self.state.prob_history.append({"role": "agent", "content": report})
 
         # If we hit the cap without completion, force the final output
@@ -766,7 +812,8 @@ class ValidationFlow(Flow[ValidationState]):
             ),
             agent=tips_agent,
         )
-        result = run_agent(task, tips_agent)
+        result = run_agent_with_memory(task, tips_agent)       # ← changed
+
 
         # Guard: retry if TIPS EVALUATION section is missing
         if "TIPS EVALUATION:" not in result.upper():
@@ -780,7 +827,7 @@ class ValidationFlow(Flow[ValidationState]):
                 expected_output=task.expected_output,
                 agent=tips_agent,
             )
-            result = run_agent(task_retry, tips_agent)
+            result = run_agent_with_memory(task, tips_agent)       # ← changed
 
         # Parse and store initial scores
         scores = parse_tips_scores(result)
@@ -914,7 +961,7 @@ class ValidationFlow(Flow[ValidationState]):
             ),
             agent=idea_agent,
         )
-        result = run_agent(task, idea_agent)
+        result = run_agent_with_memory(task, idea_agent)       # ← changed
         self.state.idea_history.append({"role": "agent", "content": result})
         self.state.idea_report = result
 
@@ -943,7 +990,7 @@ class ValidationFlow(Flow[ValidationState]):
                 ),
                 agent=idea_agent,
             )
-            result = run_agent(task, idea_agent)
+            result = run_agent_with_memory(task, idea_agent)       # ← changed
             self.state.idea_history.append({"role": "agent", "content": result})
             self.state.idea_report = result
 
