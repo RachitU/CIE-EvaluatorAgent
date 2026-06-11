@@ -4,120 +4,87 @@
 
 startup:
   intro: |
-    This system determines whether your problem is worth solving
-    and whether your proposed solution is a valid response.
+    This system helps you validate your startup idea in three stages.
 
-    PHASE 0 — Market Intelligence Scan
-      Competitive landscape · Saturation check · Gap analysis
+    STAGE 1 — Problem Definition
+      Clarify: Problem · Customer · Consequence · Assumptions
 
-    PHASE 1 — Opportunity Evaluation
-      TIPSC  (Timely · Important · Profitable · Solvable · Contextual)
-      Need Validation
-      COP    (Capability · Opportunity · Passion)
+    STAGE 2 — TIPS Evaluation
+      T (Timely) · I (Important) · P (Profitable) · S (Solvable)
 
-    PHASE 2 — Idea Evaluation
-      PSEA   (Problem-Solution Fit · Simplicity · Ethics · Assumptions)
-      Initial Feasibility
+    STAGE 3 — Idea Check
+      Quick sanity check on your proposed solution
 
   search_enabled:  "  ✓  Web search enabled — results will be injected as live context"
   search_disabled: "  ⚠  SERPER_API_KEY not set — agents will evaluate without web data"
 
-
-market_scout:
-  header:          "PHASE 0 — MARKET INTELLIGENCE SCAN"
-  running:         "  Scanning competitive landscape...\n"
-  section_proceed: "MARKET LANDSCAPE — ROOM EXISTS"
-  section_reject:  "MARKET LANDSCAPE — HIGH SATURATION WARNING"
-
-  proceed_banner: |
-    The Market Scout has found meaningful room in this market.
-    Study the landscape above before describing your solution.
-
-  reject_banner: |
-    ⚠  The Market Scout has flagged this market as highly saturated.
-    Review the analysis above carefully.
-
-  creative_header:  "YOUR CREATIVE ANGLE"
-  creative_prompt: |
-    The gaps above represent real openings.
-    Based on what you just read, describe how your approach would be
-    different from the players identified. Be specific — which gap
-    will you target, who will you serve, and what will you do differently?
-
-  reject_prompt: |
-    Type  continue  to proceed with the evaluation anyway,
-    or press Enter to exit and reconsider your approach.
-
-  reject_continue_keyword: "continue"
-  reject_exit_message: |
-    Exiting. Consider refining your problem statement or exploring
-    the adjacent opportunity suggested by the Market Scout.
-
-  angle_label:     "FOUNDER'S DIFFERENTIATION ANGLE"
-
 phases:
-  opportunity_header: "PHASE 1 — OPPORTUNITY EVALUATION"
-  opportunity_running: "  Running TIPSC triage...\n"
-  idea_header:         "PHASE 2 — IDEA EVALUATION"
-  idea_running:        "  Running PSEA evaluation...\n"
+  problem_header:   "STAGE 1 — PROBLEM DEFINITION"
+  problem_running:  "  Analysing your problem...\n"
+  tips_header:      "STAGE 2 — TIPS EVALUATION"
+  tips_running:     "  Running TIPS evaluation...\n"
+  idea_header:      "STAGE 3 — IDEA CHECK"
+  idea_running:     "  Checking your solution...\n"
 
 transitions:
-  opportunity_approved: |
-    Your opportunity has been validated. Well done.
-    Now describe the solution you propose to build.
+  problem_complete: |
+    Great — your problem is defined. Now let's evaluate the opportunity.
+  tips_complete: |
+    TIPS evaluation complete. Now describe the solution you want to build.
   final_status: |
-    Both opportunity and solution have passed validation.
-    Proceed to Desirability, Feasibility, and Viability (DFV) analysis.
+    All three stages complete. Your idea is ready for DFV analysis.
 
 prompts:
-  problem_input:  "Describe the problem you want to solve:"
-  solution_input: "Describe your proposed solution:"
-  response_input: "Your response:"
+  problem_input:   "Describe the problem you want to solve (don't worry about format — just explain it):"
+  solution_input:  "Describe the solution you want to build:"
+  response_input:  "Your response:"
 
 agent_display:
-  asking_label:   "AGENT IS ASKING:"
-  fallback_question: "Please share more information to continue the evaluation."
+  asking_label:      "AGENT IS ASKING:"
+  fallback_question: "Can you tell me more about the problem you want to solve?"
 
 section_titles:
-  main:        "ENTREPRENEURIAL OPPORTUNITY VALIDATION SYSTEM"
-  market_scan: "MARKET INTELLIGENCE SCAN"
-  opp_valid:   "OPPORTUNITY VALIDATED"
-  final:       "VALIDATION COMPLETE — FINAL REPORT"
-  dfv_ready:   "STATUS: READY FOR DFV EVALUATION"
+  main:         "STARTUP IDEA VALIDATION SYSTEM"
+  prob_complete: "PROBLEM DEFINED"
+  tips_complete: "TIPS EVALUATION COMPLETE"
+  idea_approved: "IDEA APPROVED"
+  final:        "VALIDATION COMPLETE — READY FOR DFV"
 
 report_labels:
-  problem:     "PROBLEM STATEMENT"
-  opportunity: "OPPORTUNITY EVALUATION"
+  problem:     "PROBLEM DEFINITION"
+  tips:        "TIPS EVALUATION"
   solution:    "PROPOSED SOLUTION"
-  idea:        "IDEA EVALUATION"
+  idea:        "IDEA CHECK"
+  json_output: "STRUCTURED OUTPUT (passes to DFV)"
+
+traffic_lights:
+  GREEN:  "🟢 GREEN"
+  YELLOW: "🟡 YELLOW"
+  RED:    "🔴 RED"
 
 force_close_template: |
-  ⚠  MANDATORY OVERRIDE — CRITERION MUST CLOSE NOW
-  You have spent {turns} turns investigating {name} ({criterion}).
-  The founder has provided reasonable estimates and examples.
-  At this stage of validation, reasonable evidence is sufficient.
-  You are NOT expected to have perfect data.
+  ⚠ MANDATORY OVERRIDE — CRITERION MUST CLOSE NOW
+
+  You have spent {turns} turns on {name} ({criterion}).
+  The student has already provided reasonable information.
 
   YOU MUST:
-    1. Accept what the founder has provided as sufficient for this stage.
-    2. Assign a verdict of Strong, Weak, or Accepted Risk to {name}.
-    3. Close {name} and move to the NEXT unresolved criterion.
-    4. Do NOT ask another question about {name}.
-
-  Continuing to probe {name} is a validation error. Move on.
+    1. Assign GREEN, YELLOW, or RED based on what you have.
+    2. Close this criterion immediately.
+    3. Move to the next unresolved criterion.
+    4. Do NOT ask another question about {criterion}.
 
 repetition_warning: |
-  ⚠ WARNING: Your previous question was nearly identical to the one before it.
-  The founder's answer was not sufficient — but you must ask a DIFFERENT,
-  more targeted question. Do not repeat yourself. Identify the SPECIFIC GAP
-  in the answer and probe that gap directly.
+  ⚠ WARNING: Do not repeat a question you already asked.
+  If the student gave a reasonable answer, accept it and move on.
+  Assign a score and close the criterion.
 
 web_context:
   header:    "WEB SEARCH CONTEXT  [{label}]  (fetched {date})"
   separator: "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   footer: |
-    Use the search data above to ground your evaluation in current
-    real-world evidence. Reference specific findings in your response.
+    Use the search data above to ground your evaluation.
+    Reference specific findings in your response where relevant.
   no_results:  "  (no results found)"
   search_off:  "  (web search not configured)"
   error:       "  (search error: {error})"

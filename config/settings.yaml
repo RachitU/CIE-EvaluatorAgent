@@ -3,7 +3,7 @@
 # ─────────────────────────────────────────────
 
 llm:
-  model: "openai/qwen3.5-9b"
+  model: "openai/mistralai/mistral-7b-instruct-v0.3"
   base_url: "http://localhost:1234/v1"
   api_key: "lm-studio"
 
@@ -11,9 +11,9 @@ search:
   # Free key (2,500 searches/month): https://serper.dev
   # Preferred: set via env var SERPER_API_KEY
   # Fallback: hardcode here (not recommended for shared repos)
-  serper_api_key: "7090507b409eec1ed11abe2d4d994c41a3899ec5"       # leave blank to use SERPER_API_KEY env var
-  results_per_query: 4
-  timeout_seconds: 8
+  serper_api_key: ""       # leave blank to use SERPER_API_KEY env var
+  results_per_query: 2
+  timeout_seconds: 5
 
 conversation:
   # Keep history window small to avoid context overflow on smaller LLMs.
@@ -26,11 +26,3 @@ validation:
 
 display:
   console_width: 62
-
-memory:
-  storage_path: "./.crewai/memory"
-  embedder_model: "all-MiniLM-L6-v2"
-  recency_weight: 0.3
-  semantic_weight: 0.5
-  importance_weight: 0.2
-  recency_half_life_days: 30
