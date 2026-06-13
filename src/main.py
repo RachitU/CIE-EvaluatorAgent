@@ -165,7 +165,7 @@ def run_tipsc(
         goal=agents_cfg["tipsc_agent"]["goal"],
         backstory=agents_cfg["tipsc_agent"]["backstory"],
         llm=llm,
-        tools=[search_tool],    # ← Tavily added here
+        # tools=[search_tool],    # ← Tavily added here
     )
 
     task = Task(
@@ -217,6 +217,7 @@ def run_followup(
         goal=agents_cfg["followup_agent"]["goal"],
         backstory=agents_cfg["followup_agent"]["backstory"],
         llm=llm,
+        tools=[search_tool],    # ← Tavily added here
     )
 
     task = Task(
@@ -274,27 +275,33 @@ def main():
     tips_out = run_tipsc(llm, preeval_out, agents_cfg, task_cfg, tipsc_rubric)
     save_json(tips_out.model_dump(), "tipsc_output.json")
 
-    followup = run_followup(
-    llm,
-    tips_out,
-    agents_cfg,
-    task_cfg,
-    )
+    MAX_FOLLOWUP_TURNS = 3
+    followup_context= ""
 
-    if followup.needs_followup:
+    for turn in range(MAX_FOLLOWUP_TURNS):
+
+        followup = run_followup(
+        llm,
+        tips_out,
+        agents_cfg,
+        task_cfg,
+        )
+
+        if not followup.needs_followup:
+            break
 
         question = followup.questions[0]
 
         print("\n" + "=" * 60)
-        print("FOLLOW-UP QUESTION")
+        print(f"FOLLOW-UP QUESTION ({turn + 1}/{MAX_FOLLOWUP_TURNS})")
         print("=" * 60)
 
         print(question)
 
         answer = input("> ").strip()
 
-        followup_context = f"""
-        Follow-up Question:
+        followup_context += f"""
+        Follow-up Question {turn+1}:
         {question}
 
         Founder Answer:
@@ -311,7 +318,6 @@ def main():
             tipsc_rubric,
             followup_context=followup_context,
         )
-
 
 
     print("\n" + "=" * 60)

@@ -2,10 +2,6 @@ tipsc_task:
   description: >
     {tipsc_rubric}
     ---
-    Before scoring, use your search tools to find real market evidence
-    for the Timely and Profitable dimensions. Search at least twice.
-    You MUST call the search tool before returning JSON.
-    ---
     Evaluate this idea:
 
     {preeval_json}
@@ -155,6 +151,14 @@ followup_task:
     - If no question is needed:
       needs_followup = false
       questions = []
+
+
+    IMPORTANT
+
+    Return ONLY a valid JSON object matching the required schema.
+
+    Do not return thoughts, tool calls, observations, explanations, or any text outside the JSON.
+
 
     Return ONLY valid JSON:
 
