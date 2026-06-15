@@ -55,6 +55,36 @@ class PreEvalOutput(BaseModel):
         return v
 
 
+class EthicsOutput(BaseModel):
+    harm_vector: Literal["GREEN", "YELLOW", "RED"]
+    harm_reason: str
+    legal_risk: Literal["GREEN", "YELLOW", "RED"]
+    legal_reason: str
+    problem_solution_integrity: Literal["GREEN", "RED"]
+    integrity_reason: str
+    ethics_pass: bool
+    compliance_flag: bool
+    rejection_reason: str  # empty string when ethics_pass is True
+ 
+    @field_validator(
+        "harm_vector",
+        "legal_risk",
+        "problem_solution_integrity",
+        mode="before",
+    )
+    @classmethod
+    def uppercase_scores(cls, v):
+        return v.strip().upper() if isinstance(v, str) else v
+ 
+    @field_validator("rejection_reason", mode="before")
+    @classmethod
+    def normalize_rejection(cls, v):
+        if v is None:
+            return ""
+        return str(v)
+ 
+
+
 class TIPSCOutput(BaseModel):
     refined_idea: RefinedIdea
 
