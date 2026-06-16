@@ -200,7 +200,7 @@ def run_ethics(
         agents=[agent],
         tasks=[task],
         process=Process.sequential,
-        verbose=True,
+        verbose=False,
     )
  
     result = crew.kickoff()
@@ -261,7 +261,7 @@ def run_tipsc(
         agents=[agent],
         tasks=[task],
         process=Process.sequential,
-        verbose=True,
+        verbose=False,
     )
 
     result = crew.kickoff()
@@ -273,6 +273,17 @@ def run_tipsc(
         print("Raw output:")
         print(result.raw)
         raise
+
+def print_tipsc_summary(tips_out: TIPSCOutput) -> None:
+    m = tips_out.tips_validated_metrics
+    s = tips_out.tips_rag_scores
+    print(f"  T: {m.timely_factor}")
+    print(f"  I: {m.importance_metric}")
+    print(f"  P: {m.profitability_pivot}")
+    print(f"  S: {m.solvability_constraint}")
+    print(f"\n  Scores → T={s.T}  I={s.I}  P={s.P}  S={s.S}")
+    print(f"  Readiness: {tips_out.overall_readiness}  |  DFV: {tips_out.ready_for_dfv}")
+
 
 def parse_pydantic_result(result, model):
     if result.pydantic:
@@ -308,7 +319,7 @@ def run_followup(
         agents=[agent],
         tasks=[task],
         process=Process.sequential,
-        verbose=True,
+        verbose=False,
     )
 
     result = crew.kickoff()
@@ -374,6 +385,8 @@ def main():
     print("=" * 60)
     tips_out = run_tipsc(llm, preeval_out, agents_cfg, task_cfg, tipsc_rubric)
     save_json(tips_out.model_dump(), "tipsc_output.json")
+    print()
+    print_tipsc_summary(tips_out)
 
     MAX_FOLLOWUP_TURNS = 3
     followup_context= ""
@@ -410,8 +423,6 @@ def main():
             answer = "(no answer provided)"
 
 
-
-
  
         followup_context += f"""
         Follow-up Question {turn+1}:
@@ -431,9 +442,11 @@ def main():
             tipsc_rubric,
             followup_context=followup_context,
         )
+        print_tipsc_summary(tips_out)
 
     # after the follow-up loop ends, save the final tips_out
     save_json(tips_out.model_dump(), "tipsc_output_final.json") 
+
 
     print("\n" + "=" * 60)
     print("RESULTS")
