@@ -1,124 +1,144 @@
-# Entrepreneurial Opportunity Validation System
+# Evaluator Agent
 
-A two-agent AI system that validates entrepreneurial opportunities before a founder
-commits to building a solution.
+An AI-powered evaluation agent built with CrewAI for automated assessment tasks.
 
----
+## Overview
 
-## How it works
+This project implements an evaluator agent system using CrewAI framework with LangChain integration. The agent is designed to perform automated evaluations based on configurable criteria.
 
-```
-Problem Input
-  → Agent 1: Opportunity Evaluation (TIPSC → Need → COP)
-  → [APPROVED] → Solution Input
-  → Agent 2: Idea Evaluation (PSEA + Feasibility)
-  → [READY_FOR_DFV]
-```
+## Features
 
-**Agent 1 — Opportunity Evaluation Agent**
-- Phase 1a: TIPSC Triage (Timely · Important · Profitable · Solvable · Contextual)
-- Phase 1b: TIPSC Deep-Dive (one criterion at a time, max 3 turns each)
-- Phase 1c: Need Validation
-- Phase 1d: COP (Capability · Opportunity · Passion — inferred organically)
+- CrewAI-based multi-agent evaluation system
+- Configurable agents and tasks via YAML
+- Pydantic models for structured data validation
+- YAML-based configuration for prompts and settings
 
-**Agent 2 — Idea Evaluation Agent**
-- Phase 2a: PSEA Evaluation (Problem-Solution Fit · Simplicity · Ethics · Assumptions)
-- Phase 2b: Refinement Loop (until READY_FOR_DFV)
-
----
-
-## Project structure
-
-```
-opportunity_validator/
-├── validate_opportunity.py      # Main application
-│
-├── config/
-│   └── settings.yaml            # LLM, search, conversation, display settings
-│
-├── prompts/
-│   ├── opportunity_agent.yaml   # Agent 1: role, goal, backstory, task templates
-│   ├── idea_agent.yaml          # Agent 2: role, goal, backstory, task templates
-│   └── ui_strings.yaml          # All user-facing text (headers, prompts, labels)
-│
-├── requirements.txt
-└── README.md
-```
-
----
-
-## Setup
-
-### 1. Install dependencies
+## Installation
 
 ```bash
-pip install -r requirements.txt
+pip install -e .
 ```
 
-### 2. Configure the LLM
+## Dependencies
 
-Edit `config/settings.yaml`:
+- Python >= 3.10
+- crewai >= 1.14.6
+- langchain-openai >= 0.3.0
+- pydantic >= 2.0
+- pyyaml >= 6.0
 
-```yaml
-llm:
-  model: "openai/your-model-name"
-  base_url: "http://localhost:1234/v1"   # LM Studio, Ollama, OpenAI, etc.
-  api_key: "your-key"
+## Project Structure
+
+```
+src/
+├── config/           # Agent and task configurations
+│   ├── agents.yaml   # Agent definitions
+│   └── tasks.yaml    # Task definitions
+├── skills/           # Custom skills
+│   ├── preeval/      # Pre-evaluation skills
+│   └── tipsc/        # TIPS-C skills
+├── main.py           # Entry point
+├── models.py         # Pydantic models
+└── __init__.py
 ```
 
-### 3. (Optional) Enable web search
+## Usage
 
-Get a free Serper key at https://serper.dev (2,500 searches/month).
-
-Set via environment variable (recommended):
 ```bash
-export SERPER_API_KEY=your_key_here
+python -m src.main
 ```
 
-Or set `serper_api_key` directly in `config/settings.yaml` (not recommended for shared repos).
+## Configuration
 
-### 4. Run
+Edit `src/config/agents.yaml` and `src/config/tasks.yaml` to customize agent behavior and evaluation criteria.
 
-```bash
-python validate_opportunity.py
+## LLM Model Configuration
+
+This project supports multiple LLM providers. The default configuration uses LM Studio for local deployment. To use different LLM models, modify the `load_llm()` function in `src/main.py`:
+
+### LM Studio (Default)
+```python
+def load_llm() -> LLM:
+    base_url = os.environ.get("LM_STUDIO_URL", "http://localhost:1234/v1")
+    return LLM(
+        model="openai/mistralai/mistral-7b-instruct-v0.3",
+        base_url="http://localhost:1234/v1",
+        api_key="lm-studio",
+        temperature=0.3,
+    )
 ```
 
----
+**Changes required:**
+- Set `OPENAI_API_KEY=lm-studio` and `OPENAI_MODEL_NAME=openai/mistralai/mistral-7b-instruct-v0.3` in environment
+- Ensure LM Studio server is running at http://localhost:1234/v1
 
-## Configuration reference
+### OpenAI
+```python
+def load_llm() -> LLM:
+    return LLM(
+        model="gpt-4o",
+        api_key=os.environ.get("OPENAI_API_KEY"),
+        temperature=0.3,
+    )
+```
 
-All settings are in `config/settings.yaml`.
+**Changes required:**
+- Set `OPENAI_API_KEY` to your OpenAI API key
+- Remove LM Studio environment variables
 
-| Key | Default | Description |
-|---|---|---|
-| `llm.model` | `openai/bonsai-8b` | Model identifier |
-| `llm.base_url` | `http://localhost:1234/v1` | API endpoint |
-| `llm.api_key` | `lm-studio` | API key |
-| `search.serper_api_key` | `""` | Serper key (prefer env var) |
-| `search.results_per_query` | `4` | Organic results per search |
-| `search.timeout_seconds` | `8` | HTTP timeout |
-| `conversation.max_history_turns` | `8` | Context window trimming |
-| `validation.max_turns_per_criterion` | `3` | Forced criterion advancement |
-| `display.console_width` | `62` | Terminal width for rules |
+### Anthropic
+```python
+def load_llm() -> LLM:
+    return LLM(
+        model="claude-3-5-sonnet-20241022",
+        api_key=os.environ.get("ANTHROPIC_API_KEY"),
+        temperature=0.3,
+    )
+```
 
----
+**Changes required:**
+- Set `ANTHROPIC_API_KEY` to your Anthropic API key
+- Remove OpenAI environment variables
 
-## Customising prompts
+### Google Gemini
+```python
+def load_llm() -> LLM:
+    return LLM(
+        model="gemini-1.5-pro",
+        api_key=os.environ.get("GOOGLE_API_KEY"),
+        temperature=0.3,
+    )
+```
 
-All agent prompts and task templates live in `prompts/`.
-You can edit them without touching Python code.
+**Changes required:**
+- Set `GOOGLE_API_KEY` to your Google Gemini API key
+- Remove OpenAI environment variables
 
-- `opportunity_agent.yaml` — Agent 1's goal, backstory, and task descriptions
-- `idea_agent.yaml` — Agent 2's goal, backstory, and task descriptions
-- `ui_strings.yaml` — Section headers, prompts, transitions, and warning messages
+### Azure OpenAI
+```python
+def load_llm() -> LLM:
+    return LLM(
+        model="gpt-4o",
+        api_key=os.environ.get("AZURE_OPENAI_API_KEY"),
+        base_url=os.environ.get("AZURE_OPENAI_ENDPOINT"),
+        temperature=0.3,
+    )
+```
 
-Task descriptions use Python `.format()` placeholders: `{problem}`, `{solution}`, etc.
-These are filled at runtime in `validate_opportunity.py`.
+**Changes required:**
+- Set `AZURE_OPENAI_API_KEY` to your Azure OpenAI key
+- Set `AZURE_OPENAI_ENDPOINT` to your Azure OpenAI endpoint URL
+- Remove LM Studio environment variables
 
----
+## Environment Variables
 
-## Requirements
+Set the following environment variables before running the application:
 
-- Python 3.10+
-- A running LLM endpoint (LM Studio, Ollama, OpenAI API, etc.)
-- See `requirements.txt` for Python packages
+- `LM_STUDIO_URL`: LM Studio server URL (default: http://localhost:1234/v1)
+- `OPENAI_API_KEY`: OpenAI API key (if using OpenAI)
+- `OPENAI_MODEL_NAME`: OpenAI model name (default: openai/mistralai/mistral-7b-instruct-v0.3)
+- `ANTHROPIC_API_KEY`: Anthropic API key (if using Anthropic)
+- `GOOGLE_API_KEY`: Google Gemini API key (if using Gemini)
+- `AZURE_OPENAI_API_KEY`: Azure OpenAI API key (if using Azure)
+- `AZURE_OPENAI_ENDPOINT`: Azure OpenAI endpoint URL (if using Azure)
+- `TAVILY_API_KEY` : Your tavily search api key (line 20 , main.py)

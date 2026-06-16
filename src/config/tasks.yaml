@@ -1,0 +1,141 @@
+ethics_task:
+  description: >
+    {ethics_rubric}
+ 
+    ---
+ 
+    Evaluate this idea for ethical concerns:
+ 
+    {preeval_json}
+ 
+    ---
+ 
+    Apply the three gates exactly as defined in the rubric above.
+    Use ONLY evidence present in the idea. Do not infer missing facts.
+    Do not block ideas merely because they are in a regulated space.
+    Block only if a gate is structurally RED.
+ 
+    Return ONLY valid JSON. No markdown. No explanations. No text outside the JSON.
+    Every field must be present.
+ 
+    {{
+      "harm_vector": "GREEN|YELLOW|RED",
+      "harm_reason": "one sentence explaining the harm verdict",
+      "legal_risk": "GREEN|YELLOW|RED",
+      "legal_reason": "one sentence explaining the legal verdict",
+      "problem_solution_integrity": "GREEN|RED",
+      "integrity_reason": "one sentence explaining the integrity verdict",
+      "ethics_pass": true or false,
+      "compliance_flag": true or false,
+      "rejection_reason": "one sentence if ethics_pass is false, else empty string"
+    }}
+ 
+  expected_output: "Valid JSON matching the EthicsOutput schema exactly. No markdown, no extra keys."
+
+tipsc_task:
+  description: >
+    {tipsc_rubric}
+
+    ---
+    
+    Evaluate this idea:
+
+    {preeval_json}
+    
+    ---
+    
+    Additional Founder Information:
+
+    {followup_context}
+    
+    ---
+    
+    If additional information is provided, use it when scoring TIPSC dimensions.
+    
+    IMPORTANT RE-EVALUATION RULES
+
+    If followup_context is provided, treat founder answers as new evidence.
+    Re-score all affected dimensions from scratch. Do not preserve prior scores.
+    Upgrade if evidence strengthens. Downgrade if evidence weakens.
+    Recompute overall_readiness and ready_for_dfv after any score change.
+
+    Return ONLY valid JSON in exactly this format. No markdown. No explanations.
+    Every field must be present. Use only GREEN, YELLOW, or RED for scores.
+    Use only STRONG, MODERATE, or WEAK for overall_readiness.
+
+    {{
+      "refined_idea": {{
+        "customer_segment": "",
+        "qualified_problem": "",
+        "consequence": "",
+        "proposed_solution": ""
+      }},
+      "solution_alignment" : "GREEN|YELLOW|RED",
+      "tips_validated_metrics": {{
+        "timely_factor": "1-sentence justification for T score",
+        "importance_metric": "1-sentence justification for I score",
+        "profitability_pivot": "1-sentence justification for P score",
+        "solvability_constraint": "1-sentence justification for S score"
+      }},
+      "tips_rag_scores": {{
+        "T": "GREEN|YELLOW|RED",
+        "I": "GREEN|YELLOW|RED",
+        "P": "GREEN|YELLOW|RED",
+        "S": "GREEN|YELLOW|RED"
+      }},
+      "overall_readiness": "STRONG|MODERATE|WEAK",
+      "ready_for_dfv": true or false
+    }}
+
+  expected_output: "Valid JSON matching the schema exactly. No markdown, no extra keys."
+
+
+followup_task:
+  description: |
+    Review the TIPSC evaluation below.
+
+    TIPSC Result:
+    {tipsc_json}
+
+    ---
+
+    Prior Follow-Up Q&A (questions already asked and answered — do NOT re-ask these):
+    {followup_context}
+
+    ---
+
+    Your task:
+    Determine whether additional founder information could materially change 
+    any RED or YELLOW score that has not already been addressed in prior Q&A.
+
+    For every YELLOW or RED score not yet covered by prior answers:
+ 
+    1. Identify the exact missing evidence preventing a stronger score.
+    2. Ask a question that directly tests the rubric requirement.
+    3. Prefer questions about:
+       - ability to execute
+       - access to resources
+       - customer willingness to pay
+       - acquisition plans
+       - validation evidence
+
+    Do NOT ask about background or experience alone if the rubric can also be
+    satisfied through partnerships, hiring, advisors, consultants, or other
+    acquisition plans.
+
+    The question must help distinguish between the current score and a higher or lower score.
+
+    Ask at most ONE question total — choose the one most likely to change a score.
+
+    If all YELLOW/RED scores have already been addressed in prior Q&A, or if
+    all scores are GREEN, set needs_followup = false and questions = [].
+ 
+    Return ONLY valid JSON. No markdown. No explanations. No text outside the JSON.
+ 
+    {{
+      "needs_followup": true,
+      "questions": ["Your single most important question here"]
+    }}
+
+  expected_output: >
+    JSON matching FollowUpOutput schema with needs_followup bool and questions list.
