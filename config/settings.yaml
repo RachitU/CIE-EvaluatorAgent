@@ -3,7 +3,7 @@
 # ─────────────────────────────────────────────
 
 llm:
-  model: "openai/deepseek/deepseek-r1-0528-qwen3-8b"
+  model: "openai/ministral-3-8b-instruct-2512"
   base_url: "http://localhost:1234/v1"
   api_key: "lm-studio"
 
