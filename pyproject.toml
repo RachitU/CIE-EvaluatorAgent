@@ -8,6 +8,7 @@ version = "0.1.0"
 requires-python = ">=3.10"
 dependencies = [
     "crewai>=1.14.6",
+    "crewai-tools>=1.14.7",
     "langchain-openai>=0.3.0",
     "pydantic>=2.0",
     "pyyaml>=6.0",
