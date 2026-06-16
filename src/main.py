@@ -13,7 +13,7 @@ from pathlib import Path
 import yaml
 from crewai import Agent, Crew, LLM, Process, Task
 from crewai_tools import TavilySearchTool
-from models import PreEvalOutput, TIPSCOutput, FollowUpOutput
+from models import PreEvalOutput, TIPSCOutput, FollowUpOutput, DFVOutput
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -257,9 +257,55 @@ def run_followup(
 
     result = crew.kickoff()
 
+    print("\n===== FOLLOWUP RAW OUTPUT =====")
+    print(result.raw)
+    print("===============================\n")
+
+    return parse_pydantic_result(
+    result,
+    FollowUpOutput,
+)
+
+
+def run_dfv_synthesis(
+    llm,
+    agents_cfg,
+    task_cfg,
+    evaluation_report: str
+):
+    agent = Agent(
+    role=agents_cfg["dfv_synthesizer"]["role"],
+    goal=agents_cfg["dfv_synthesizer"]["goal"],
+    backstory=agents_cfg["dfv_synthesizer"]["backstory"],
+    llm=llm,
+    verbose=True,
+)
+    task = Task(
+    description=f"""
+    {task_cfg["dfv_synthesis"]["description"]}
+
+    Evaluation Report:
+
+    {evaluation_report}
+    """,
+    expected_output=task_cfg["dfv_synthesis"]["expected_output"],
+    agent=agent,
+)
+    crew = Crew(
+    agents=[agent],
+    tasks=[task],
+    process=Process.sequential,
+    verbose=True,
+)
+    result = crew.kickoff()
+
+    print("\n===== DFV RAW OUTPUT =====")
+    print(result.raw)
+    print("==========================\n")
+
     return parse_pydantic_result(
         result,
-        FollowUpOutput,
+        DFVOutput,
     )
 
 
@@ -378,6 +424,28 @@ def main():
         print("\nResult: Idea does NOT qualify. Address RED scores first.")
 
     print("\nDone.")
+
+    evaluation_report = f"""
+    PRE-EVALUATION
+
+    {preeval_out.model_dump_json(indent=2)}
+
+    TIPSC EVALUATION
+
+    {tips_out.model_dump_json(indent=2)}
+    """
+
+    dfv_out = run_dfv_synthesis(
+        llm,
+        agents_cfg,
+        task_cfg,
+        evaluation_report,
+    )
+
+    save_json(
+        dfv_out.model_dump(),
+        "dfv_output.json"
+    )
 
 
 if __name__ == "__main__":

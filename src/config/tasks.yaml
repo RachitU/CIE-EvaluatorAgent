@@ -105,3 +105,44 @@ followup_task:
 
   expected_output: >
     JSON matching FollowUpOutput schema with needs_followup bool and questions list.
+
+dfv_synthesis:
+  description: |
+    Review the complete startup evaluation report.
+
+    Generate:
+
+    1. Desirability
+       - customer pain
+       - demand signals
+       - user motivation
+       - market need
+
+    2. Feasibility
+       - technical feasibility
+       - operational feasibility
+       - team capability
+       - implementation risks
+
+    3. Viability
+       - revenue potential
+       - business sustainability
+       - competition
+       - costs
+       - profitability
+
+    Use only information contained in the report.
+
+    Do not invent facts.
+
+    Write professional narrative summaries
+    similar to startup case studies.
+
+  expected_output: |
+    Valid JSON:
+
+    {
+      "desirability": "...",
+      "feasibility": "...",
+      "viability": "..."
+    }

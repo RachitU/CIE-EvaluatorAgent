@@ -106,4 +106,31 @@ class FollowUpOutput(BaseModel):
         return normalized
 
 
+class DesirabilityOutput(BaseModel):
+    customer_pain: str
+    demand_signals: str
+    user_motivation: str
+    market_need: str
+
+
+class FeasibilityOutput(BaseModel):
+    technical_feasibility: str
+    operational_feasibility: str
+    team_capability: str
+    implementation_risks: str
+
+
+class ViabilityOutput(BaseModel):
+    revenue_potential: str
+    business_sustainability: str
+    competition: str
+    costs: str
+    profitability: str
+
+
+class DFVOutput(BaseModel):
+    desirability: DesirabilityOutput
+    feasibility: FeasibilityOutput
+    viability: ViabilityOutput
+
 
