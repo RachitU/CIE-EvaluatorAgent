@@ -13,7 +13,7 @@ from pathlib import Path
 import yaml
 from crewai import Agent, Crew, LLM, Process, Task
 from crewai_tools import TavilySearchTool
-from models import PreEvalOutput, TIPSCOutput, FollowUpOutput, DFVOutput
+from models import PreEvalOutput, TIPSCOutput, FollowUpOutput, EthicsOutput, DFVOutput
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -93,10 +93,7 @@ JSON_SYSTEM_PREFIX = (
 )
  
 def call_llm_for_json(llm: LLM, messages: list) -> str:
-    """
-    Prepend the JSON enforcement system message to any direct llm.call() invocation
-    that expects a JSON response. This replaces response_format={"type":"json_object"}.
-    """
+
     enforced = [{"role": "system", "content": JSON_SYSTEM_PREFIX}] + messages
     return llm.call(enforced).strip()
  
@@ -173,7 +170,66 @@ def run_preeval(llm: LLM, skill_text: str) -> PreEvalOutput:
         return PreEvalOutput.model_validate_json(raw2)
 
 
-# ── Phase 2: TIPSC crew evaluation ─────────────
+# ── Phase 2: Ethics pre-screen ────────────────────────────────────────────────
+ 
+ 
+def run_ethics(
+    llm: LLM,
+    preeval: PreEvalOutput,
+    agents_cfg: dict,
+    task_cfg: dict,
+    ethics_rubric: str,
+    ) -> EthicsOutput:
+    agent = Agent(
+        role=agents_cfg["ethics_agent"]["role"],
+        goal=agents_cfg["ethics_agent"]["goal"],
+        backstory=agents_cfg["ethics_agent"]["backstory"],
+        llm=llm,
+    )
+ 
+    task = Task(
+        description=task_cfg["ethics_task"]["description"].format(
+            ethics_rubric=ethics_rubric,
+            preeval_json=preeval.model_dump_json(indent=2),
+        ),
+        expected_output=task_cfg["ethics_task"]["expected_output"],
+        agent=agent,
+    )
+ 
+    crew = Crew(
+        agents=[agent],
+        tasks=[task],
+        process=Process.sequential,
+        verbose=False,
+    )
+ 
+    result = crew.kickoff()
+ 
+    try:
+        return parse_pydantic_result(result, EthicsOutput)
+    except Exception as e:
+        print(f"ERROR: Could not parse Ethics output: {e}")
+        print("Raw output:")
+        print(result.raw)
+        raise
+ 
+ 
+def print_ethics_result(ethics: EthicsOutput) -> None:
+    gate_icon = lambda score: "✅" if score == "GREEN" else ("⚠️ " if score == "YELLOW" else "❌")
+ 
+    print(f"\n  Harm Vector:              {gate_icon(ethics.harm_vector)} {ethics.harm_vector}")
+    print(f"    {ethics.harm_reason}")
+    print(f"  Legal Risk:               {gate_icon(ethics.legal_risk)} {ethics.legal_risk}")
+    print(f"    {ethics.legal_reason}")
+    print(f"  Problem-Solution Integrity: {gate_icon(ethics.problem_solution_integrity)} {ethics.problem_solution_integrity}")
+    print(f"    {ethics.integrity_reason}")
+ 
+    if ethics.compliance_flag:
+        print("\n  ⚠️  COMPLIANCE FLAG: This idea operates in a regulated space.")
+        print("     Ensure legal/compliance review before DFV.")
+
+
+# ── Phase 3: TIPSC crew evaluation ─────────────
 
 
 def run_tipsc(
@@ -205,7 +261,7 @@ def run_tipsc(
         agents=[agent],
         tasks=[task],
         process=Process.sequential,
-        verbose=True,
+        verbose=False,
     )
 
     result = crew.kickoff()
@@ -217,6 +273,17 @@ def run_tipsc(
         print("Raw output:")
         print(result.raw)
         raise
+
+def print_tipsc_summary(tips_out: TIPSCOutput) -> None:
+    m = tips_out.tips_validated_metrics
+    s = tips_out.tips_rag_scores
+    print(f"  T: {m.timely_factor}")
+    print(f"  I: {m.importance_metric}")
+    print(f"  P: {m.profitability_pivot}")
+    print(f"  S: {m.solvability_constraint}")
+    print(f"\n  Scores → T={s.T}  I={s.I}  P={s.P}  S={s.S}")
+    print(f"  Readiness: {tips_out.overall_readiness}  |  DFV: {tips_out.ready_for_dfv}")
+
 
 def parse_pydantic_result(result, model):
     if result.pydantic:
@@ -252,7 +319,7 @@ def run_followup(
         agents=[agent],
         tasks=[task],
         process=Process.sequential,
-        verbose=True,
+        verbose=False,
     )
 
     result = crew.kickoff()
@@ -320,6 +387,7 @@ def main():
     task_cfg = load_yaml("config/tasks.yaml")
     preeval_skill = load_text("skills/preeval/SKILL.md")
     tipsc_rubric = load_text("skills/tipsc/SKILL.md")
+    ethics_rubric = load_text("skills/ethics/SKILL.md")
 
     llm=load_llm()
 
@@ -340,10 +408,31 @@ def main():
     save_json(preeval_out.model_dump(), "preeval_output.json")
 
     print("\n" + "=" * 60)
-    print("PHASE 2: TIPSC Evaluation")
+    print("PHASE 2: Ethics Pre-Screen")
+    print("=" * 60)
+    ethics_out = run_ethics(llm, preeval_out, agents_cfg, task_cfg, ethics_rubric)
+    save_json(ethics_out.model_dump(), "ethics_output.json")
+ 
+    print_ethics_result(ethics_out)
+ 
+    if not ethics_out.ethics_pass:
+        print("\n" + "=" * 60)
+        print("❌  IDEA REJECTED AT ETHICS GATE")
+        print("=" * 60)
+        print(f"  Reason: {ethics_out.rejection_reason}")
+        print("\n  This idea will not proceed to TIPSC evaluation.")
+        print("\nDone.")
+        sys.exit(0)
+ 
+    print("\n  ✅ Ethics gate passed. Proceeding to TIPSC evaluation.")
+
+    print("\n" + "=" * 60)
+    print("PHASE 3: TIPSC Evaluation")
     print("=" * 60)
     tips_out = run_tipsc(llm, preeval_out, agents_cfg, task_cfg, tipsc_rubric)
     save_json(tips_out.model_dump(), "tipsc_output.json")
+    print()
+    print_tipsc_summary(tips_out)
 
     MAX_FOLLOWUP_TURNS = 3
     followup_context= ""
@@ -380,8 +469,6 @@ def main():
             answer = "(no answer provided)"
 
 
-
-
  
         followup_context += f"""
         Follow-up Question {turn+1}:
@@ -401,9 +488,11 @@ def main():
             tipsc_rubric,
             followup_context=followup_context,
         )
+        print_tipsc_summary(tips_out)
 
     # after the follow-up loop ends, save the final tips_out
     save_json(tips_out.model_dump(), "tipsc_output_final.json") 
+
 
     print("\n" + "=" * 60)
     print("RESULTS")

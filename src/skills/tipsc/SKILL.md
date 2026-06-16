@@ -33,9 +33,9 @@ S (Solvable):
 AGGREGATION RULES
 
 overall_readiness:
-- Any RED TIPSC score → WEAK
-- Else if 3+ GREEN TIPSC scores → STRONG
-- Else → MODERATE
+- IF any RED TIPSC score → WEAK
+- ELSE if 3+ GREEN TIPSC scores → STRONG
+- ELSE → MODERATE
 
 ready_for_dfv:
 - If solution_alignment is RED → false

@@ -1,3 +1,37 @@
+ethics_task:
+  description: >
+    {ethics_rubric}
+ 
+    ---
+ 
+    Evaluate this idea for ethical concerns:
+ 
+    {preeval_json}
+ 
+    ---
+ 
+    Apply the three gates exactly as defined in the rubric above.
+    Use ONLY evidence present in the idea. Do not infer missing facts.
+    Do not block ideas merely because they are in a regulated space.
+    Block only if a gate is structurally RED.
+ 
+    Return ONLY valid JSON. No markdown. No explanations. No text outside the JSON.
+    Every field must be present.
+ 
+    {{
+      "harm_vector": "GREEN|YELLOW|RED",
+      "harm_reason": "one sentence explaining the harm verdict",
+      "legal_risk": "GREEN|YELLOW|RED",
+      "legal_reason": "one sentence explaining the legal verdict",
+      "problem_solution_integrity": "GREEN|RED",
+      "integrity_reason": "one sentence explaining the integrity verdict",
+      "ethics_pass": true or false,
+      "compliance_flag": true or false,
+      "rejection_reason": "one sentence if ethics_pass is false, else empty string"
+    }}
+ 
+  expected_output: "Valid JSON matching the EthicsOutput schema exactly. No markdown, no extra keys."
+
 tipsc_task:
   description: >
     {tipsc_rubric}
