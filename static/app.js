@@ -35,6 +35,7 @@ let eventSource   = null;
 let awaitingInput = false;
 let currentPhase  = '';
 let hadError      = false;   // set when an 'error' event arrives, suppresses SSE onerror banner
+let sessionComplete = false; // set when 'complete' event arrives
 
 const PHASE_LABELS = {
   intro:              'Getting Started',
@@ -60,6 +61,8 @@ const PHASE_ICONS = {
 // ═══════════════════════════════════════════════════════════════
 
 async function startSession() {
+  if (sessionId) return;
+  sessionComplete = false;
   startBtn.disabled = true;
   startBtn.textContent = 'Initialising…';
   hadError = false;
@@ -129,8 +132,8 @@ function openStream() {
 
     eventSource.onerror = () => {
       setTyping(false);
-      // If we already received a proper error event, don't pile on with a second vague message.
-      if (!hadError && !awaitingInput) {
+      // If we already received a proper error event or the session completed, don't pile on with a vague message.
+      if (!hadError && !awaitingInput && !sessionComplete) {
         appendSystemMsg('Connection to server lost. The session may have ended — click \'New Validation\' to restart.', 'warning');
       }
       eventSource.close();
@@ -172,6 +175,7 @@ function handleEvent(ev) {
 
     case 'complete':
       setTyping(false);
+      sessionComplete = true;
       appendFinalReport(ev.summary);
       disableInput('Validation complete!');
       markPhase('report', 'done');

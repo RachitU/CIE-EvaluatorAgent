@@ -154,26 +154,16 @@ class ChatValidationFlow(Flow[ValidationState]):
             self._agent_tools = []
 
         try:
-            # Use no custom embedder — avoids sentence-transformer / protobuf
-            # version conflicts on Windows. CrewAI will use its built-in default.
-            self._shared_memory = Memory(
-                llm=self._llm,
-                storage=str(BASE_DIR / ".crewai" / "memory"),
-                recency_weight=0.2,
-                semantic_weight=0.4,
-                importance_weight=0.4,
-                recency_half_life_days=60,
-                consolidation_threshold=1.0,
-                query_analysis_threshold=99999,
-            )
-        except Exception as mem_err:
-            # Memory is optional — fall back to a no-op object so the flow still runs
+            # Memory requires an embedder (like OpenAI) which causes issues when using
+            # local LLMs like LM Studio without an OPENAI_API_KEY. We disable it.
             import types
             self._shared_memory = types.SimpleNamespace(
                 recall=lambda *a, **kw: [],
                 remember=lambda *a, **kw: None,
                 extract_memories=lambda *a, **kw: [],
             )
+        except Exception:
+            pass
 
         opp_skill   = _load_skill("opportunity_agent")
         idea_skill  = _load_skill("idea_agent")
@@ -587,8 +577,13 @@ class ChatValidationFlow(Flow[ValidationState]):
         if end == -1:
             return {}
         try:
-            return json.loads(fragment[start:end])
-        except Exception:
+            # Attempt to fix common JSON errors (like unescaped newlines inside strings)
+            # though json.loads is quite strict.
+            cleaned_fragment = fragment[start:end]
+            return json.loads(cleaned_fragment)
+        except Exception as e:
+            print(f"JSON Parsing Error in _extract_json_block: {e}")
+            print(f"--- FRAGMENT ATTEMPTED TO PARSE ---\n{fragment[start:end]}\n-----------------------------------")
             return {}
 
     def _extract_problem_definition(self, text: str) -> dict:
