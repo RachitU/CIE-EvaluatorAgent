@@ -108,6 +108,9 @@ class ValidationState(BaseModel):
     tips_turns:   int = 0
     tips_output:  dict = {}         # final TIPS_OUTPUT JSON
 
+    # ── DFV Agent output ──────────────────────────────────────────────────
+    dfv_output:   dict = {}         # final DFV_OUTPUT JSON
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 # CHAT VALIDATION FLOW
@@ -232,6 +235,22 @@ class ChatValidationFlow(Flow[ValidationState]):
             memory=False,
         )
 
+        dfv_skill = _load_skill("dfv_agent")
+        self._dfv_agent = Agent(
+            role="DFV Evaluator Agent",
+            goal=dfv_skill,
+            backstory=(
+                "Expert venture architect tasked with producing a final Desirability, "
+                "Feasibility, and Viability (DFV) report for a startup idea. "
+                "You base your analysis entirely on the Problem Definition, Market Scan, "
+                "and TIPS Scorecard."
+            ),
+            verbose=False,
+            tools=[],
+            llm=self._llm,
+            memory=False,
+        )
+
     # ──────────────────────────────────────────────────────────────────────────
     # Event emitters
     # ──────────────────────────────────────────────────────────────────────────
@@ -261,6 +280,7 @@ class ChatValidationFlow(Flow[ValidationState]):
                 "market_angle":       self.state.market_angle,
                 "market_report":      self.state.market_report,
                 "tips_output":        self.state.tips_output,
+                "dfv_output":         self.state.dfv_output,
             }
         })
 
@@ -577,14 +597,15 @@ class ChatValidationFlow(Flow[ValidationState]):
         if end == -1:
             return {}
         try:
-            # Attempt to fix common JSON errors (like unescaped newlines inside strings)
-            # though json.loads is quite strict.
-            cleaned_fragment = fragment[start:end]
-            return json.loads(cleaned_fragment)
-        except Exception as e:
-            print(f"JSON Parsing Error in _extract_json_block: {e}")
-            print(f"--- FRAGMENT ATTEMPTED TO PARSE ---\n{fragment[start:end]}\n-----------------------------------")
-            return {}
+            return json.loads(fragment[start:end])
+        except Exception:
+            try:
+                import json_repair
+                return json_repair.loads(fragment[start:end])
+            except Exception as e:
+                print(f"JSON Parsing Error in _extract_json_block: {e}")
+                print(f"--- FRAGMENT ATTEMPTED TO PARSE ---\n{fragment[start:end]}\n-----------------------------------")
+                return {}
 
     def _extract_problem_definition(self, text: str) -> dict:
         """Parse PROBLEM_DEFINITION: JSON block from agent output."""
@@ -1066,9 +1087,46 @@ class ChatValidationFlow(Flow[ValidationState]):
         return tips_out
 
     @listen(tips_evaluation_loop)
-    def final_json_output(self, tips_result):
-        """Step 5 \u2014 Save to memory and emit final JSON."""
+    def dfv_report_loop(self, tips_result):
+        """Step 5 — Generate the final DFV Report using the DFV Agent."""
         if tips_result is None:
+            return None
+
+        self._emit_phase("report", "Final Report", "active")
+        self._emit_system("Generating final Desirability, Feasibility, Viability (DFV) report...", "info")
+
+        import json
+        prob_def = json.dumps(self.state.problem_definition, indent=2)
+        market_rep = self.state.market_report or "No market scan conducted."
+        tips_rep = json.dumps(self.state.tips_output, indent=2)
+
+        task = Task(
+            description=(
+                f"Generate a final DFV report for this startup idea.\n\n"
+                f"PROBLEM DEFINITION:\n{prob_def}\n\n"
+                f"MARKET SCAN:\n{market_rep}\n\n"
+                f"TIPS SCORECARD:\n{tips_rep}\n\n"
+                "Return the DFV_OUTPUT: JSON block. No markdown, no explanations."
+            ),
+            expected_output="DFV_OUTPUT: JSON block with desirability, feasibility, viability.",
+            agent=self._dfv_agent,
+        )
+        result = self._run_agent(task, self._dfv_agent)
+        dfv_out = self._extract_json_block(result, "DFV_OUTPUT:")
+        
+        if dfv_out:
+            self.state.dfv_output = dfv_out
+            self._emit_system("✓  DFV report successfully generated.", "success")
+        else:
+            self._emit_system("DFV generation completed (could not parse output).", "warning")
+            self.state.dfv_output = {"desirability": "Error generating.", "feasibility": "Error generating.", "viability": "Error generating."}
+
+        return dfv_out
+
+    @listen(dfv_report_loop)
+    def final_json_output(self, dfv_result):
+        """Step 6 \u2014 Save to memory and emit final JSON."""
+        if dfv_result is None:
             return None
 
         self._emit_phase("report", "Final Report", "active")

@@ -395,6 +395,7 @@ function appendFinalReport(summary) {
 
   const tips   = summary.tips_output   || {};
   const probDef= summary.problem_definition || {};
+  const dfv    = summary.dfv_output    || {};
   const scores = tips.tips_scores || {};
   const metrics= tips.tips_validated_metrics || {};
   const verdict= tips.overall_verdict || '';
@@ -482,6 +483,23 @@ function appendFinalReport(summary) {
       <div class="report-section-val">
         Scout verdict: ${verdictChip(summary.market_verdict)}
         ${summary.market_angle ? `<br><em>${escHtml(summary.market_angle)}</em>` : ''}
+      </div>
+    </div>` : ''}
+
+    ${Object.keys(dfv).length > 0 ? `
+    <div class="report-section" style="margin-top: 16px;">
+      <div class="report-section-label" style="font-size: 1.1em; color: var(--primary-accent); margin-bottom: 8px;">📊 DFV Analysis</div>
+      <div style="margin-bottom: 12px;">
+        <strong style="color: var(--text-base);">Desirability:</strong>
+        <p style="margin: 4px 0 0; font-size: 0.9em; line-height: 1.5; color: var(--text-2);">${escHtml(dfv.desirability || 'Not evaluated.')}</p>
+      </div>
+      <div style="margin-bottom: 12px;">
+        <strong style="color: var(--text-base);">Feasibility:</strong>
+        <p style="margin: 4px 0 0; font-size: 0.9em; line-height: 1.5; color: var(--text-2);">${escHtml(dfv.feasibility || 'Not evaluated.')}</p>
+      </div>
+      <div style="margin-bottom: 12px;">
+        <strong style="color: var(--text-base);">Viability:</strong>
+        <p style="margin: 4px 0 0; font-size: 0.9em; line-height: 1.5; color: var(--text-2);">${escHtml(dfv.viability || 'Not evaluated.')}</p>
       </div>
     </div>` : ''}
 
