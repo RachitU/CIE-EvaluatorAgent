@@ -1137,14 +1137,14 @@ class ChatValidationFlow(Flow[ValidationState]):
             self._save_validation_result(
                 problem    = self.state.problem,
                 solution   = self.state.solution,
-                opp_report = json.dumps(tips_result, indent=2),
+                opp_report = json.dumps(self.state.tips_output, indent=2),
                 idea_report= json.dumps(self.state.problem_definition, indent=2),
             )
         except Exception:
             pass
 
         self._emit_complete()
-        return tips_result
+        return dfv_result
 
 
 # ══════════════════════════════════════════════════════════════════════════════
