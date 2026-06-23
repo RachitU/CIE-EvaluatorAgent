@@ -12,6 +12,7 @@ This project implements an evaluator agent system using CrewAI framework with La
 - Configurable agents and tasks via YAML
 - Pydantic models for structured data validation
 - YAML-based configuration for prompts and settings
+- Market validation via web search (Tavily) for assumption checking and competitor research
 
 ## Installation
 
@@ -27,19 +28,29 @@ pip install -e .
 - pydantic >= 2.0
 - pyyaml >= 6.0
 
+## Pipeline
+
+The evaluation pipeline runs in four sequential phases:
+
+1. **Pre-Evaluation** — Collects problem definition (6 items: problem, customer segment, consequence, assumptions, proposed solution, geography & sector).
+2. **Market Validation** — Researches founder assumptions and competitor landscape via web search, outputs a validation summary (STRONG / MIXED / WEAK).
+3. **Ethics Pre-Screen** — Applies three gates (harm vector, legal risk, problem-solution integrity) to flag ethical concerns.
+4. **TIPSC Evaluation** — Scores overall readiness and determines DFV eligibility, enriched with validation and follow-up context.
+
 ## Project Structure
 
 ```
 src/
-├── config/           # Agent and task configurations
-│   ├── agents.yaml   # Agent definitions
-│   └── tasks.yaml    # Task definitions
-├── skills/           # Custom skills
-│   ├── preeval/      # Pre-evaluation skills
-│   └── tipsc/        # TIPS-C skills
-├── main.py           # Entry point
-├── models.py         # Pydantic models
+├── config/              # Agent and task configurations
+│   ├── agents.yaml      # Agent definitions
+│   └── tasks.yaml       # Task definitions
+├── skills/              # Custom skills
+│   ├── preeval/         # Pre-evaluation skills
+│   └── tipsc/           # TIPS-C skills
+├── main.py              # Entry point (pipeline orchestrator)
+├── models.py            # Pydantic models
 └── __init__.py
+outputs/                 # Saved JSON outputs from each phase
 ```
 
 ## Usage
