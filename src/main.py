@@ -13,7 +13,7 @@ from pathlib import Path
 import yaml
 from crewai import Agent, Crew, LLM, Process, Task
 from crewai_tools import TavilySearchTool
-from models import PreEvalOutput, TIPSCOutput, FollowUpOutput, EthicsOutput, ValidationOutput
+from models import PreEvalOutput, TIPSCOutput, FollowUpOutput, EthicsOutput, ValidationOutput, RegulatoryOutput
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -387,7 +387,170 @@ def print_validation_summary(val: ValidationOutput) -> None:
         print(f"  Market notes: {val.market_notes}")
 
 
-# ── Phase 3: Ethics pre-screen ────────────────────────────────────────────────
+# ── Phase 3: Regulatory mapping ───────────────────────────────────────────────
+
+def normalize_regulatory_dict(data: dict, preeval: PreEvalOutput) -> dict:
+    if not isinstance(data, dict):
+        return data
+    known_keys = {
+        "target_geography", "industry_sector", "applicable_regulations",
+        "regulatory_summary", "requires_specialist_review", "key_compliance_risks",
+    }
+    if not (known_keys & data.keys()) and len(data) == 1:
+        inner = next(iter(data.values()))
+        if isinstance(inner, dict):
+            data = inner
+    rs = data.get("regulatory_summary")
+    if isinstance(rs, list):
+        data["regulatory_summary"] = " ".join(str(x) for x in rs)
+    elif rs is None:
+        data["regulatory_summary"] = "No regulatory summary available."
+    kcr = data.get("key_compliance_risks")
+    if isinstance(kcr, str):
+        data["key_compliance_risks"] = [kcr] if kcr else []
+    elif kcr is None:
+        data["key_compliance_risks"] = []
+    ar = data.get("applicable_regulations")
+    if not isinstance(ar, list):
+        data["applicable_regulations"] = []
+    rsr = data.get("requires_specialist_review")
+    if isinstance(rsr, str):
+        data["requires_specialist_review"] = rsr.strip().lower() == "true"
+    data.setdefault("target_geography", preeval.target_geography)
+    data.setdefault("industry_sector", preeval.industry_sector)
+    data.setdefault("requires_specialist_review", False)
+    return data
+
+
+def run_regulatory(
+    llm: LLM,
+    preeval: PreEvalOutput,
+    agents_cfg: dict,
+    task_cfg: dict,
+) -> "RegulatoryOutput":
+    from models import RegulatoryOutput
+ 
+    agent = Agent(
+        role=agents_cfg["regulatory_agent"]["role"],
+        goal=agents_cfg["regulatory_agent"]["goal"],
+        backstory=agents_cfg["regulatory_agent"]["backstory"],
+        llm=llm,
+        tools=[search_tool],
+        max_iter=6,
+        max_execution_time=int(os.environ.get("REGULATORY_TIMEOUT_SECS", 300)),
+    )
+ 
+    task = Task(
+        description=task_cfg["regulatory_task"]["description"].format(
+            preeval_json=preeval.model_dump_json(indent=2),
+        ),
+        expected_output=task_cfg["regulatory_task"]["expected_output"],
+        agent=agent,
+    )
+ 
+    crew = Crew(
+        agents=[agent],
+        tasks=[task],
+        process=Process.sequential,
+        verbose=False,
+    )
+ 
+    try:
+        result = crew.kickoff()
+        research_notes = result.raw
+    except TimeoutError:
+        print("  Regulatory research timed out. Returning minimal regulatory output.")
+        research_notes = None
+ 
+    if research_notes is None:
+        return RegulatoryOutput(
+            target_geography=preeval.target_geography,
+            industry_sector=preeval.industry_sector,
+            applicable_regulations=[],
+            regulatory_summary="Regulatory research did not complete in time. Manual review recommended.",
+            requires_specialist_review=True,
+            key_compliance_risks=["Research timed out — specialist review required."],
+        )
+ 
+    schema_hint = json.dumps(RegulatoryOutput.model_json_schema(), indent=2)
+    format_prompt = (
+        "Convert the regulatory research notes below into ONE flat JSON object "
+        "matching this exact structure. Do NOT nest fields under any extra top-level key.\n\n"
+        f"Target schema (for reference):\n{schema_hint}\n\n"
+        "Required shape:\n"
+        "{\n"
+        '  "target_geography": "...",\n'
+        '  "industry_sector": "...",\n'
+        '  "applicable_regulations": [\n'
+        '    {"name": "...", "jurisdiction": "...", "compliance_burden": "HIGH|MEDIUM|LOW", "brief_requirement": "..."}\n'
+        "  ],\n"
+        '  "regulatory_summary": "one paragraph string",\n'
+        '  "requires_specialist_review": true or false,\n'
+        '  "key_compliance_risks": ["risk 1", "risk 2"]\n'
+        "}\n\n"
+        "If no regulations apply, use an empty list for applicable_regulations.\n"
+        "regulatory_summary and key_compliance_risks MUST be a plain string and plain list respectively.\n\n"
+        f"Research notes:\n{research_notes}"
+    )
+ 
+    def _attempt_format(prompt_text: str) -> "RegulatoryOutput":
+        raw = call_llm_for_json(llm, [{"role": "user", "content": prompt_text}])
+        cleaned = clean_json(raw)
+        data = normalize_regulatory_dict(json.loads(cleaned), preeval)
+        return RegulatoryOutput.model_validate(data)
+ 
+    try:
+        return _attempt_format(format_prompt)
+    except Exception as e:
+        print(f"  Regulatory formatting failed ({e}). Retrying with stricter prompt...")
+        stricter_prompt = (
+            "Your previous output did not match the required flat JSON schema. "
+            "Output ONLY the JSON object below, filled in:\n\n"
+            "{\n"
+            f'  "target_geography": "{preeval.target_geography}",\n'
+            f'  "industry_sector": "{preeval.industry_sector}",\n'
+            '  "applicable_regulations": [],\n'
+            '  "regulatory_summary": "Regulatory research incomplete. Manual review recommended.",\n'
+            '  "requires_specialist_review": true,\n'
+            '  "key_compliance_risks": ["Manual specialist review required."]\n'
+            "}\n\n"
+            f"Research notes:\n{research_notes}"
+        )
+        try:
+            return _attempt_format(stricter_prompt)
+        except Exception as e2:
+            print(f"ERROR: Regulatory recovery retry also failed: {e2}")
+            print("Falling back to safe default RegulatoryOutput.")
+            return RegulatoryOutput(
+                target_geography=preeval.target_geography,
+                industry_sector=preeval.industry_sector,
+                applicable_regulations=[],
+                regulatory_summary="Regulatory formatting failed. Manual review recommended.",
+                requires_specialist_review=True,
+                key_compliance_risks=["Formatting error — specialist review required."],
+            )
+ 
+ 
+def print_regulatory_summary(reg: "RegulatoryOutput") -> None:
+    burden_icon = {"HIGH": "🔴", "MEDIUM": "🟡", "LOW": "🟢"}
+    print(f"  Geography: {reg.target_geography}  |  Sector: {reg.industry_sector}")
+    print(f"  Specialist review required: {'⚠️  Yes' if reg.requires_specialist_review else '✅ No'}")
+    if reg.applicable_regulations:
+        print()
+        for r in reg.applicable_regulations:
+            icon = burden_icon.get(r.compliance_burden, "")
+            print(f"  {icon} [{r.compliance_burden}] {r.name} ({r.jurisdiction})")
+            print(f"      {r.brief_requirement}")
+    else:
+        print("  No specific regulations identified.")
+    if reg.key_compliance_risks:
+        print(f"\n  Key risks:")
+        for risk in reg.key_compliance_risks:
+            print(f"    • {risk}")
+    print(f"\n  Summary: {reg.regulatory_summary}")
+
+
+# ── Phase 4: Ethics pre-screen ────────────────────────────────────────────────
  
  
 def run_ethics(
@@ -397,6 +560,7 @@ def run_ethics(
     task_cfg: dict,
     ethics_rubric: str,
     validation_context: str = "",
+    regulatory_context: str = "",
 ) -> EthicsOutput:
     agent = Agent(
         role=agents_cfg["ethics_agent"]["role"],
@@ -410,6 +574,7 @@ def run_ethics(
             ethics_rubric=ethics_rubric,
             preeval_json=preeval.model_dump_json(indent=2),
             validation_context=validation_context if validation_context else "Not yet available.",
+            regulatory_context=regulatory_context if regulatory_context else "Not yet available.",
         ),
         expected_output=task_cfg["ethics_task"]["expected_output"],
         agent=agent,
@@ -421,9 +586,9 @@ def run_ethics(
         process=Process.sequential,
         verbose=False,
     )
- 
+
     result = crew.kickoff()
- 
+
     try:
         return parse_pydantic_result(result, EthicsOutput)
     except Exception as e:
@@ -448,7 +613,7 @@ def print_ethics_result(ethics: EthicsOutput) -> None:
         print("     Ensure legal/compliance review before DFV.")
 
 
-# ── Phase 3: TIPSC crew evaluation ─────────────
+# ── Phase 5: TIPSC crew evaluation ─────────────
 
 
 def run_tipsc(
@@ -594,9 +759,17 @@ def main():
     validation_context = validation_out.model_dump_json(indent=2)
 
     print("\n" + "=" * 60)
-    print("PHASE 3: Ethics Pre-Screen")
+    print("PHASE 3: Regulatory Mapping")
     print("=" * 60)
-    ethics_out = run_ethics(llm, preeval_out, agents_cfg, task_cfg, ethics_rubric,validation_context=validation_context)
+    regulatory_out = run_regulatory(llm, preeval_out, agents_cfg, task_cfg)
+    save_json(regulatory_out.model_dump(), "regulatory_output.json")
+    print_regulatory_summary(regulatory_out)
+    regulatory_context = regulatory_out.model_dump_json(indent=2)
+
+    print("\n" + "=" * 60)
+    print("PHASE 4: Ethics Pre-Screen")
+    print("=" * 60)
+    ethics_out = run_ethics(llm, preeval_out, agents_cfg, task_cfg, ethics_rubric,validation_context=validation_context,regulatory_context=regulatory_context)
     save_json(ethics_out.model_dump(), "ethics_output.json")
  
     print_ethics_result(ethics_out)
@@ -613,7 +786,7 @@ def main():
     print("\n  ✅ Ethics gate passed. Proceeding to TIPSC evaluation.")
 
     print("\n" + "=" * 60)
-    print("PHASE 4: TIPSC Evaluation")
+    print("PHASE 5: TIPSC Evaluation")
     print("=" * 60)
     tips_out = run_tipsc(llm, preeval_out, agents_cfg, task_cfg, tipsc_rubric,
                          validation_context=validation_context)

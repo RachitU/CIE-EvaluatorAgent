@@ -209,6 +209,56 @@ class TIPSCOutput(BaseModel):
         return self
 
 
+class ApplicableRegulation(BaseModel):
+    name: str
+    jurisdiction: str
+    compliance_burden: Literal["HIGH", "MEDIUM", "LOW"]
+    brief_requirement: str
+ 
+    @field_validator("compliance_burden", mode="before")
+    @classmethod
+    def uppercase_burden(cls, v):
+        return v.strip().upper() if isinstance(v, str) else v
+ 
+ 
+class RegulatoryOutput(BaseModel):
+    target_geography: str
+    industry_sector: str
+    applicable_regulations: list[ApplicableRegulation] = []
+    regulatory_summary: str
+    requires_specialist_review: bool
+    key_compliance_risks: list[str] = []
+ 
+    @field_validator("applicable_regulations", mode="before")
+    @classmethod
+    def normalize_regulations(cls, v):
+        if not isinstance(v, list):
+            return []
+        return v
+ 
+    @field_validator("key_compliance_risks", mode="before")
+    @classmethod
+    def normalize_risks(cls, v):
+        if not isinstance(v, list):
+            return []
+        return [str(r) for r in v]
+ 
+    @field_validator("regulatory_summary", mode="before")
+    @classmethod
+    def normalize_summary(cls, v):
+        if isinstance(v, list):
+            return " ".join(str(x) for x in v)
+        return str(v) if v else "No regulatory summary available."
+ 
+    @field_validator("target_geography", "industry_sector", mode="before")
+    @classmethod
+    def fix_strings(cls, v):
+        if isinstance(v, list):
+            return " ".join(map(str, v))
+        return str(v) if v else ""
+ 
+
+
 
 class FollowUpOutput(BaseModel):
     needs_followup: bool
