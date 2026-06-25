@@ -113,10 +113,10 @@ def save_json(data, filename: str) -> Path:
 
 
 def load_llm() -> LLM:
-    base_url = os.environ.get("LM_STUDIO_URL", "http://localhost:1234/v1")
+    base_url = os.environ.get("LM_STUDIO_URL", "http://10.14.140.96:1234/v1")
     return LLM(
         model="openai/mistralai/mistral-7b-instruct-v0.3",
-        base_url="http://localhost:1234/v1",
+        base_url="http://10.14.140.96:1234/v1",
         api_key="lm-studio",
         temperature=0.2,
     )
@@ -247,7 +247,40 @@ def normalize_validation_dict(data: dict, preeval: PreEvalOutput) -> dict:
     mn = data.get("market_notes")
     if isinstance(mn, (dict, list)):
         data["market_notes"] = json.dumps(mn, default=str)
- 
+
+
+    # Normalize verdict strings in checked_assumptions.
+    # Small models like Mistral 7B decorate verdicts with extra text, e.g.
+    # "CONFIRMED WITH SOME UNCERTAINTY" instead of the bare enum value.
+    # We prefix-match to recover the canonical value before Pydantic sees it.
+    _VERDICT_PREFIXES = ("CONFIRMED", "UNCONFIRMED", "CONTRADICTED")
+    assumptions = data.get("checked_assumptions")
+    if isinstance(assumptions, list):
+        for item in assumptions:
+            if not isinstance(item, dict):
+                continue
+            raw_verdict = str(item.get("verdict", "")).strip().upper()
+            for canonical in _VERDICT_PREFIXES:
+                if raw_verdict.startswith(canonical):
+                    if raw_verdict != canonical:
+                        print(f"  [Auto-correct] verdict: {item['verdict']!r} -> {canonical!r}")
+                    item["verdict"] = canonical
+                    break
+            else:
+                # No prefix matched — fall back to UNCONFIRMED so Pydantic doesn't crash
+                print(f"  [Auto-correct] unrecognised verdict {item.get('verdict')!r} -> 'UNCONFIRMED'")
+                item["verdict"] = "UNCONFIRMED"
+
+    # Normalize validation_summary the same way (e.g. "MIXED - see notes")
+    _SUMMARY_PREFIXES = ("STRONG", "MIXED", "WEAK")
+    vs = str(data.get("validation_summary", "")).strip().upper()
+    for canonical in _SUMMARY_PREFIXES:
+        if vs.startswith(canonical):
+            if vs != canonical:
+                print(f"  [Auto-correct] validation_summary: {data['validation_summary']!r} -> {canonical!r}")
+            data["validation_summary"] = canonical
+            break
+
     # fall back to preeval values for required fields the model dropped
     data.setdefault("target_geography", preeval.target_geography)
     data.setdefault("industry_sector", preeval.industry_sector)
@@ -613,8 +646,44 @@ def print_ethics_result(ethics: EthicsOutput) -> None:
         print("     Ensure legal/compliance review before DFV.")
 
 
-# ── Phase 5: TIPSC crew evaluation ─────────────
-
+# ── Compliance context builder ─────────────────
+ 
+ 
+def build_compliance_context(ethics: EthicsOutput, regulatory: "RegulatoryOutput") -> str:
+    """
+    Build a plain-text compliance summary to pass to TIPSC and follow-up agents.
+    Returns an empty string if no compliance flag is set — agents treat that as
+    'no regulatory concern, score S on technical capability alone'.
+    """
+    if not ethics.compliance_flag:
+        return ""
+ 
+    lines = [
+        "COMPLIANCE NOTICE: This idea operates in a regulated space.",
+        f"Specialist review required: {regulatory.requires_specialist_review}",
+        f"Ethics legal risk verdict: {ethics.legal_risk} — {ethics.legal_reason}",
+        "",
+    ]
+ 
+    if regulatory.applicable_regulations:
+        lines.append("Applicable regulations:")
+        for r in regulatory.applicable_regulations:
+            lines.append(
+                f"  - {r.name} ({r.jurisdiction}) "
+                f"[{r.compliance_burden} burden]: {r.brief_requirement}"
+            )
+        lines.append("")
+ 
+    if regulatory.key_compliance_risks:
+        lines.append("Key compliance risks:")
+        for risk in regulatory.key_compliance_risks:
+            lines.append(f"  - {risk}")
+        lines.append("")
+ 
+    lines.append(f"Regulatory summary: {regulatory.regulatory_summary}")
+ 
+    return "\n".join(lines)
+ 
 
 def run_tipsc(
     llm: LLM,
@@ -623,6 +692,7 @@ def run_tipsc(
     task_cfg: dict,
     rubric: str,
     validation_context: str = "",
+    compliance_context: str = "",
     followup_context: str = "",
 ) -> TIPSCOutput:
     agent = Agent(
@@ -637,6 +707,7 @@ def run_tipsc(
             tipsc_rubric=rubric,
             preeval_json=preeval.model_dump_json(indent=2),
             validation_context=validation_context if validation_context else "Not yet available.",
+            compliance_context=compliance_context if compliance_context else "No compliance concerns flagged.",
             followup_context=followup_context if followup_context else "None provided.",
         ),
         expected_output=task_cfg["tipsc_task"]["expected_output"],
@@ -684,6 +755,7 @@ def run_followup(
     agents_cfg: dict,
     task_cfg: dict,
     followup_context: str = "",  # FIX: pass accumulated prior Q&A
+    compliance_context: str = "",
 ) -> FollowUpOutput:
     agent = Agent(
         role=agents_cfg["followup_agent"]["role"],
@@ -695,6 +767,7 @@ def run_followup(
     task = Task(
         description=task_cfg["followup_task"]["description"].format(
             tipsc_json=tipsc_output.model_dump_json(indent=2),
+            compliance_context=compliance_context if compliance_context else "No compliance concerns flagged.",
             followup_context=followup_context if followup_context else "None yet.",
         ),
         expected_output=task_cfg["followup_task"]["expected_output"],
@@ -773,6 +846,10 @@ def main():
     save_json(ethics_out.model_dump(), "ethics_output.json")
  
     print_ethics_result(ethics_out)
+
+    if regulatory_out.requires_specialist_review and not ethics_out.compliance_flag:
+        ethics_out.compliance_flag = True
+        print("  [Auto-correct] compliance_flag: False -> True (requires_specialist_review override)")  
  
     if not ethics_out.ethics_pass:
         print("\n" + "=" * 60)
@@ -785,11 +862,16 @@ def main():
  
     print("\n  ✅ Ethics gate passed. Proceeding to TIPSC evaluation.")
 
+    compliance_context = build_compliance_context(ethics_out, regulatory_out)
+    if compliance_context:
+        print("\n  ⚠️  Compliance context built — will inform TIPSC S-dimension scoring.")
+
     print("\n" + "=" * 60)
     print("PHASE 5: TIPSC Evaluation")
     print("=" * 60)
     tips_out = run_tipsc(llm, preeval_out, agents_cfg, task_cfg, tipsc_rubric,
-                         validation_context=validation_context)
+                         validation_context=validation_context,
+                         compliance_context=compliance_context)
     save_json(tips_out.model_dump(), "tipsc_output.json")
     print()
     print_tipsc_summary(tips_out)
@@ -805,6 +887,7 @@ def main():
         agents_cfg,
         task_cfg,
         followup_context=followup_context,
+        compliance_context=compliance_context,
         )
 
         if not followup.needs_followup:
@@ -847,6 +930,7 @@ def main():
             task_cfg,
             tipsc_rubric,
             validation_context=validation_context,
+            compliance_context=compliance_context,
             followup_context=followup_context,
         )
         print_tipsc_summary(tips_out)
@@ -864,6 +948,25 @@ def main():
     print(f"  S (Solvable):    {tips_out.tips_rag_scores.S}")
     print(f"  Readiness:       {tips_out.overall_readiness}")
     print(f"  Ready for DFV:   {tips_out.ready_for_dfv}")
+
+    if ethics_out.compliance_flag:
+        print("\n" + "=" * 60)
+        print("⚠️  COMPLIANCE NOTICE")
+        print("=" * 60)
+        print(f"  Legal risk:  {ethics_out.legal_risk} — {ethics_out.legal_reason}")
+        if regulatory_out.applicable_regulations:
+            burden_icon = {"HIGH": "🔴", "MEDIUM": "🟡", "LOW": "🟢"}
+            print("\n  Regulations flagged:")
+            for r in regulatory_out.applicable_regulations:
+                icon = burden_icon.get(r.compliance_burden, "")
+                print(f"    {icon} [{r.compliance_burden}] {r.name} ({r.jurisdiction})")
+                print(f"        {r.brief_requirement}")
+        if regulatory_out.key_compliance_risks:
+            print("\n  Key compliance risks:")
+            for risk in regulatory_out.key_compliance_risks:
+                print(f"    • {risk}")
+        print(f"\n  Summary: {regulatory_out.regulatory_summary}")
+        print("\n  → Legal/compliance review required before DFV.")
 
     # TODO (DFV Agent): gateway — only proceed if ready_for_dfv
     # TODO (DFV Agent): pass refined_idea from tips_out to DFV agent

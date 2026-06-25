@@ -159,6 +159,12 @@ tipsc_task:
     {validation_context}
 
     ---
+ 
+    Compliance Context:
+ 
+    {compliance_context}
+ 
+    ---
 
     Additional Founder Information:
 
@@ -166,6 +172,16 @@ tipsc_task:
     
     ---
     
+    COMPLIANCE SCORING RULE (S dimension):
+    If compliance_context is non-empty, treat regulatory compliance capability as
+    a required capability for S (Solvable) scoring:
+    - No compliance plan for a HIGH-burden regulation → RED on S unless a credible
+      acquisition plan is stated (legal counsel, compliance hire, licensed partner).
+    - Partial or stated compliance plan for HIGH-burden → YELLOW on S at most.
+    - MEDIUM/LOW burden without a stated plan → YELLOW at most, not RED.
+    - If compliance_context is empty or states no regulations apply → score S on
+      technical/operational capability alone.
+
     If additional information is provided, use it when scoring TIPSC dimensions.
     
     IMPORTANT RE-EVALUATION RULES
@@ -215,6 +231,11 @@ followup_task:
 
     ---
 
+    Compliance Context:
+    {compliance_context}
+
+    ---
+
     Prior Follow-Up Q&A (questions already asked and answered — do NOT re-ask these):
     {followup_context}
 
@@ -234,6 +255,13 @@ followup_task:
        - customer willingness to pay
        - acquisition plans
        - validation evidence
+
+    COMPLIANCE QUESTIONS (S dimension):
+    If compliance_context is non-empty and S is YELLOW or RED, and no prior
+    answer has addressed the compliance gap, you MAY ask about the founder's
+    compliance plan — for example: whether they have engaged legal counsel,
+    identified a licensed partner, or have a regulatory advisor. This is a
+    valid evidence gap for the S dimension.
 
     Do NOT ask about background or experience alone if the rubric can also be
     satisfied through partnerships, hiring, advisors, consultants, or other
