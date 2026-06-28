@@ -33,6 +33,8 @@ class PreEvalOutput(BaseModel):
     consequence: str
     assumptions: list[str]
     proposed_solution: str
+    target_geography: str
+    industry_sector: str
 
     @field_validator("assumptions", mode="before")
     @classmethod
@@ -46,6 +48,8 @@ class PreEvalOutput(BaseModel):
         "customer_segment",
         "consequence",
         "proposed_solution",
+        "target_geography",
+        "industry_sector",
         mode="before"
     )
     @classmethod
@@ -53,6 +57,38 @@ class PreEvalOutput(BaseModel):
         if isinstance(v, list):
             return " ".join(map(str, v))
         return v
+
+
+class AssumptionCheck(BaseModel):
+    assumption: str
+    verdict: Literal["CONFIRMED", "UNCONFIRMED", "CONTRADICTED"]
+    evidence: str
+
+    @field_validator("verdict", mode="before")
+    @classmethod
+    def uppercase_verdict(cls, v):
+        return v.strip().upper() if isinstance(v, str) else v
+
+    @field_validator("evidence", mode="before")
+    @classmethod
+    def normalize_evidence(cls, v):
+        if v is None:
+            return "No evidence found."
+        return str(v)
+
+
+class ValidationOutput(BaseModel):
+    target_geography: str
+    industry_sector: str
+    checked_assumptions: list[AssumptionCheck]
+    competitor_landscape: str
+    market_notes: str
+    validation_summary: Literal["STRONG", "MIXED", "WEAK"]
+
+    @field_validator("validation_summary", mode="before")
+    @classmethod
+    def uppercase_summary(cls, v):
+        return v.strip().upper() if isinstance(v, str) else v
 
 
 class EthicsOutput(BaseModel):
@@ -82,7 +118,31 @@ class EthicsOutput(BaseModel):
         if v is None:
             return ""
         return str(v)
+    
+    @model_validator(mode="after")
+    def enforce_aggregation_rules(self) -> "EthicsOutput":
+        gates = [self.harm_vector, self.legal_risk, self.problem_solution_integrity]
  
+        correct_pass = "RED" not in gates
+        if self.ethics_pass != correct_pass:
+            print(f"  [Auto-correct] ethics_pass: {self.ethics_pass} -> {correct_pass}")
+            self.ethics_pass = correct_pass
+
+        correct_compliance_flag = self.legal_risk == "YELLOW"
+        if self.compliance_flag != correct_compliance_flag:
+            print(f"  [Auto-correct] compliance_flag: {self.compliance_flag} -> {correct_compliance_flag}")
+            self.compliance_flag = correct_compliance_flag
+
+        if not self.ethics_pass and not self.rejection_reason:
+            failed_gate = (
+                "harm_vector" if self.harm_vector == "RED"
+                else "legal_risk" if self.legal_risk == "RED"
+                else "problem_solution_integrity"
+            )
+            self.rejection_reason = f"Blocked: {failed_gate} gate scored RED."
+            print(f"  [Auto-correct] rejection_reason was empty on a failing result; filled from {failed_gate}.")
+ 
+        return self
 
 
 class TIPSCOutput(BaseModel):
@@ -131,7 +191,7 @@ class TIPSCOutput(BaseModel):
             correct_readiness = "MODERATE"
 
         if self.overall_readiness != correct_readiness:
-            print(f"  [Auto-correct] overall_readiness: {self.overall_readiness} → {correct_readiness}")
+            print(f"  [Auto-correct] overall_readiness: {self.overall_readiness} -> {correct_readiness}")
             self.overall_readiness = correct_readiness
 
         # Recompute ready_for_dfv using the corrected readiness
@@ -143,10 +203,60 @@ class TIPSCOutput(BaseModel):
             correct_dfv = True
 
         if self.ready_for_dfv != correct_dfv:
-            print(f"  [Auto-correct] ready_for_dfv: {self.ready_for_dfv} → {correct_dfv}")
+            print(f"  [Auto-correct] ready_for_dfv: {self.ready_for_dfv} -> {correct_dfv}")
             self.ready_for_dfv = correct_dfv
 
         return self
+
+
+class ApplicableRegulation(BaseModel):
+    name: str
+    jurisdiction: str
+    compliance_burden: Literal["HIGH", "MEDIUM", "LOW"]
+    brief_requirement: str
+ 
+    @field_validator("compliance_burden", mode="before")
+    @classmethod
+    def uppercase_burden(cls, v):
+        return v.strip().upper() if isinstance(v, str) else v
+ 
+ 
+class RegulatoryOutput(BaseModel):
+    target_geography: str
+    industry_sector: str
+    applicable_regulations: list[ApplicableRegulation] = []
+    regulatory_summary: str
+    requires_specialist_review: bool
+    key_compliance_risks: list[str] = []
+ 
+    @field_validator("applicable_regulations", mode="before")
+    @classmethod
+    def normalize_regulations(cls, v):
+        if not isinstance(v, list):
+            return []
+        return v
+ 
+    @field_validator("key_compliance_risks", mode="before")
+    @classmethod
+    def normalize_risks(cls, v):
+        if not isinstance(v, list):
+            return []
+        return [str(r) for r in v]
+ 
+    @field_validator("regulatory_summary", mode="before")
+    @classmethod
+    def normalize_summary(cls, v):
+        if isinstance(v, list):
+            return " ".join(str(x) for x in v)
+        return str(v) if v else "No regulatory summary available."
+ 
+    @field_validator("target_geography", "industry_sector", mode="before")
+    @classmethod
+    def fix_strings(cls, v):
+        if isinstance(v, list):
+            return " ".join(map(str, v))
+        return str(v) if v else ""
+ 
 
 
 

@@ -44,9 +44,13 @@ regardless of the specific country of operation?"
           services, unconsented surveillance, promotion of illegal activity,
           CSAM, or similar hard prohibitions.
 
-Note: Gambling is YELLOW (legal in many places), not RED.
+Note: Gambling is YELLOW (legal in many places), not RED(depends on region).
 Note: Payday lending is YELLOW (regulated but legal). 1500%+ APR targeting
       people with no alternatives and GPS tracking as coercion is RED.
+
+If regulatory_context is provided:
+- If applicable_regulations includes HIGH-burden items → score YELLOW at minimum.
+- If key_compliance_risks exist that would block the core business model → consider RED.
 
 ═══════════════════════════════════════════════════════
 GATE 3 — PROBLEM-SOLUTION INTEGRITY
@@ -66,6 +70,7 @@ AGGREGATION RULES
 ═══════════════════════════════════════════════════════
 - ANY gate RED → ethics_pass = false
 - LEGAL_RISK YELLOW → ethics_pass = true, compliance_flag = true
+- requires_specialist_review true (from regulatory_context) → compliance_flag = true  (this is additive — it does not change ethics_pass or any gate score)
 - All GREEN → ethics_pass = true, compliance_flag = false
 
 ═══════════════════════════════════════════════════════
@@ -78,7 +83,7 @@ Every field must be present.
   "harm_vector": "GREEN|YELLOW|RED",
   "harm_reason": "one sentence — what specific harm exists or does not exist",
   "legal_risk": "GREEN|YELLOW|RED",
-  "legal_reason": "one sentence — what legal issue exists or does not exist",
+  "legal_reason": "one sentence — what legal issue exists or does not exist (reference regulatory findings if provided)",
   "problem_solution_integrity": "GREEN|RED",
   "integrity_reason": "one sentence — whether solution addresses or replicates the problem",
   "ethics_pass": true or false,

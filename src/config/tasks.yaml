@@ -1,3 +1,93 @@
+validation_task:
+  description: >
+    Validate the founder's assumptions and market claims using search.
+ 
+    Founder input:
+    {preeval_json}
+ 
+    ---
+ 
+    Your goal: gather just enough search evidence to assess each assumption as
+    CONFIRMED, UNCONFIRMED, or CONTRADICTED, and to describe the competitor landscape.
+ 
+    Search budget — MAXIMUM 3 searches total across all assumptions:
+    - Combine related assumptions into a single broad query where possible
+      (e.g. "IoT predictive maintenance India SME market" covers market size,
+      geography, and sector in one go)
+    - Do not search each assumption individually if a single query can cover several
+    - If you have already found relevant evidence for an assumption from a prior
+      search, do NOT search again for that assumption — reuse what you have
+    - If search returns nothing, mark the assumption UNCONFIRMED; do not retry
+ 
+    For each assumption, write one sentence stating what was found and the verdict.
+    Also write a short competitor landscape paragraph and any market notes.
+ 
+    A separate step will convert your findings to JSON — do NOT produce JSON yourself.
+    Stop as soon as you have covered all assumptions (even partially) and the
+    competitor landscape. Do not keep searching after your 3-search budget is used.
+ 
+  expected_output: >
+    A plain-text research summary: for each assumption, the verdict (CONFIRMED/
+    UNCONFIRMED/CONTRADICTED) and one-sentence evidence; a competitor landscape
+    paragraph; and market notes relevant to TIPSC scoring.
+ 
+
+
+regulatory_task:
+  description: >
+    Map the startup's geography and industry to applicable regulations.
+ 
+    Founder input:
+    {preeval_json}
+ 
+    ---
+ 
+    STEP 1 — Knowledge-based classification:
+    Determine if the domain plausibly touches any of these regulated spaces:
+    healthcare, finance/fintech, cryptocurrency, data privacy, platform/social,
+    consumer safety, employment, food/beverage, AI/synthetic content, or other
+    heavily regulated industries.
+ 
+    If NO regulated domain is detected, skip searching and return an empty
+    applicable_regulations list immediately.
+ 
+    STEP 2 — If regulated domain detected, search to confirm (max 3 searches):
+    - Prefer queries like "[Regulation] [country] 2024 compliance requirements"
+    - Check for recent changes (2023+) to any identified regulation
+    - Confirm actual compliance burden: HIGH (requires legal/expert team),
+      MEDIUM (planned effort by a small team), LOW (standard practice)
+    - Identify the key regulatory bodies (RBI, SEBI, MeitY, CERT-In, etc.)
+ 
+    STEP 3 — For each applicable regulation, produce:
+    - name: the specific regulation or framework (e.g. "India DPDP Act 2023")
+    - jurisdiction: the geography it applies in (e.g. "India", "EU", "Global")
+    - compliance_burden: HIGH | MEDIUM | LOW
+    - brief_requirement: one sentence — what must this startup do to comply?
+ 
+    If no regulations apply, return applicable_regulations as an empty list.
+ 
+    Return ONLY valid JSON. No markdown. No explanations. No text outside the JSON.
+    Every field must be present.
+ 
+    {{
+      "target_geography": "...",
+      "industry_sector": "...",
+      "applicable_regulations": [
+        {{
+          "name": "...",
+          "jurisdiction": "...",
+          "compliance_burden": "HIGH|MEDIUM|LOW",
+          "brief_requirement": "one sentence"
+        }}
+      ],
+      "regulatory_summary": "one paragraph summarizing the overall regulatory posture",
+      "requires_specialist_review": true or false,
+      "key_compliance_risks": ["risk 1", "risk 2"]
+    }}
+ 
+  expected_output: "Valid JSON matching the RegulatoryOutput schema exactly. No markdown, no extra keys."
+ 
+  
 ethics_task:
   description: >
     {ethics_rubric}
@@ -5,14 +95,34 @@ ethics_task:
     ---
  
     Evaluate this idea for ethical concerns:
- 
+
     {preeval_json}
+
+    ---
+
+    Market Validation Results:
+    {validation_context}
+
+    ---
+    
+    Regulatory Context:
+    {regulatory_context}
  
     ---
- 
+
+
     Apply the three gates exactly as defined in the rubric above.
-    Use ONLY evidence present in the idea. Do not infer missing facts.
-    Do not block ideas merely because they are in a regulated space.
+    Use ONLY evidence present in the idea, validation results, and regulatory context.
+    Do not infer missing facts. Do not block ideas merely because they are in a
+    regulated space.
+ 
+    For GATE 2 (LEGAL RISK), use the regulatory context to enrich your verdict:
+    - If applicable_regulations includes HIGH-burden items, score YELLOW at minimum
+    - If key_compliance_risks exist that block the core business model, consider RED
+    - If requires_specialist_review is true, set compliance_flag = true in addition
+      to any EthicsOutput logic
+    - If no applicable_regulations found, score based on the idea itself alone
+ 
     Block only if a gate is structurally RED.
  
     Return ONLY valid JSON. No markdown. No explanations. No text outside the JSON.
@@ -22,7 +132,7 @@ ethics_task:
       "harm_vector": "GREEN|YELLOW|RED",
       "harm_reason": "one sentence explaining the harm verdict",
       "legal_risk": "GREEN|YELLOW|RED",
-      "legal_reason": "one sentence explaining the legal verdict",
+      "legal_reason": "one sentence explaining the legal verdict (may reference regulatory findings)",
       "problem_solution_integrity": "GREEN|RED",
       "integrity_reason": "one sentence explaining the integrity verdict",
       "ethics_pass": true or false,
@@ -41,15 +151,37 @@ tipsc_task:
     Evaluate this idea:
 
     {preeval_json}
-    
+
     ---
-    
+
+    Market Validation Research:
+
+    {validation_context}
+
+    ---
+ 
+    Compliance Context:
+ 
+    {compliance_context}
+ 
+    ---
+
     Additional Founder Information:
 
     {followup_context}
     
     ---
     
+    COMPLIANCE SCORING RULE (S dimension):
+    If compliance_context is non-empty, treat regulatory compliance capability as
+    a required capability for S (Solvable) scoring:
+    - No compliance plan for a HIGH-burden regulation → RED on S unless a credible
+      acquisition plan is stated (legal counsel, compliance hire, licensed partner).
+    - Partial or stated compliance plan for HIGH-burden → YELLOW on S at most.
+    - MEDIUM/LOW burden without a stated plan → YELLOW at most, not RED.
+    - If compliance_context is empty or states no regulations apply → score S on
+      technical/operational capability alone.
+
     If additional information is provided, use it when scoring TIPSC dimensions.
     
     IMPORTANT RE-EVALUATION RULES
@@ -99,6 +231,11 @@ followup_task:
 
     ---
 
+    Compliance Context:
+    {compliance_context}
+
+    ---
+
     Prior Follow-Up Q&A (questions already asked and answered — do NOT re-ask these):
     {followup_context}
 
@@ -118,6 +255,13 @@ followup_task:
        - customer willingness to pay
        - acquisition plans
        - validation evidence
+
+    COMPLIANCE QUESTIONS (S dimension):
+    If compliance_context is non-empty and S is YELLOW or RED, and no prior
+    answer has addressed the compliance gap, you MAY ask about the founder's
+    compliance plan — for example: whether they have engaged legal counsel,
+    identified a licensed partner, or have a regulatory advisor. This is a
+    valid evidence gap for the S dimension.
 
     Do NOT ask about background or experience alone if the rubric can also be
     satisfied through partnerships, hiring, advisors, consultants, or other
