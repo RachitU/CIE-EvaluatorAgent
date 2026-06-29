@@ -1,23 +1,28 @@
 # Evaluator Agent
 
-An AI-powered evaluation agent built with CrewAI for automated assessment tasks.
+An AI-powered evaluation agent built with CrewAI for automated startup assessment. Evaluates ideas through a structured multi-phase pipeline: Pre-Evaluation, Market Validation, Regulatory Mapping, Ethics Pre-Screen, TIPSC scoring, and Follow-up.
 
-## Overview
+## Pipeline
 
-This project implements an evaluator agent system using CrewAI framework with LangChain integration. The agent is designed to perform automated evaluations based on configurable criteria.
+The evaluation pipeline runs in six sequential phases:
 
-## Features
-
-- CrewAI-based multi-agent evaluation system
-- Configurable agents and tasks via YAML
-- Pydantic models for structured data validation
-- YAML-based configuration for prompts and settings
-- Market validation via web search (Tavily) for assumption checking and competitor research
+1. **Pre-Evaluation** — Interactive interview (up to 6 turns) to collect: problem statement, customer segment, consequence, assumptions, proposed solution, target geography, and industry sector.
+2. **Market Validation** — Web research (Tavily) validating founder assumptions (CONFIRMED/UNCONFIRMED/CONTRADICTED), competitor landscape, and overall validation summary (STRONG/MIXED/WEAK).
+3. **Regulatory Mapping** — Identifies applicable regulations (GDPR, HIPAA, DPDP Act, etc.), compliance burden, and whether specialist review is needed.
+4. **Ethics Pre-Screen** — Three gates (harm vector, legal risk, problem-solution integrity) flag structural concerns. Ideas with RED on any gate are rejected before scoring.
+5. **TIPSC Evaluation** — Scores across Timely, Important, Profitable, Solvable dimensions (GREEN/YELLOW/RED), computes overall readiness (STRONG/MODERATE/WEAK), and determines DFV eligibility.
+6. **Follow-up (up to 3 turns)** — Iterative Q&A where the agent asks targeted questions to address RED/YELLOW scores, then re-evaluates TIPSC with new evidence.
 
 ## Installation
 
 ```bash
 pip install -e .
+```
+
+Or with `uv`:
+
+```bash
+uv sync
 ```
 
 ## Dependencies
@@ -27,28 +32,21 @@ pip install -e .
 - langchain-openai >= 0.3.0
 - pydantic >= 2.0
 - pyyaml >= 6.0
-
-## Pipeline
-
-The evaluation pipeline runs in four sequential phases:
-
-1. **Pre-Evaluation** — Collects problem definition (6 items: problem, customer segment, consequence, assumptions, proposed solution, geography & sector).
-2. **Market Validation** — Researches founder assumptions and competitor landscape via web search, outputs a validation summary (STRONG / MIXED / WEAK).
-3. **Ethics Pre-Screen** — Applies three gates (harm vector, legal risk, problem-solution integrity) to flag ethical concerns.
-4. **TIPSC Evaluation** — Scores overall readiness and determines DFV eligibility, enriched with validation and follow-up context.
+- tavily-python >= 0.7.26
 
 ## Project Structure
 
 ```
 src/
 ├── config/              # Agent and task configurations
-│   ├── agents.yaml      # Agent definitions
-│   └── tasks.yaml       # Task definitions
-├── skills/              # Custom skills
-│   ├── preeval/         # Pre-evaluation skills
-│   └── tipsc/           # TIPS-C skills
-├── main.py              # Entry point (pipeline orchestrator)
-├── models.py            # Pydantic models
+│   ├── agents.yaml      # Agent definitions (6 agents)
+│   └── tasks.yaml       # Task definitions (5 tasks)
+├── skills/              # Custom skill rubrics
+│   ├── preeval/         # Pre-evaluation skill
+│   ├── tipsc/           # TIPSC evaluation rubric
+│   └── ethics/          # Ethics pre-screen rubric
+├── main.py              # Pipeline orchestrator (entry point)
+├── models.py            # Pydantic models for all phases
 └── __init__.py
 outputs/                 # Saved JSON outputs from each phase
 ```
@@ -59,97 +57,26 @@ outputs/                 # Saved JSON outputs from each phase
 python -m src.main
 ```
 
+With `uv`:
+
+```bash
+uv run python -m src.main
+```
+
+The pipeline is interactive — you will be prompted during Pre-Evaluation and Follow-up phases.
+
 ## Configuration
 
-Edit `src/config/agents.yaml` and `src/config/tasks.yaml` to customize agent behavior and evaluation criteria.
-
-## LLM Model Configuration
-
-This project supports multiple LLM providers. The default configuration uses LM Studio for local deployment. To use different LLM models, modify the `load_llm()` function in `src/main.py`:
-
-### LM Studio (Default)
-```python
-def load_llm() -> LLM:
-    base_url = os.environ.get("LM_STUDIO_URL", "http://localhost:1234/v1")
-    return LLM(
-        model="openai/mistralai/mistral-7b-instruct-v0.3",
-        base_url="http://localhost:1234/v1",
-        api_key="lm-studio",
-        temperature=0.3,
-    )
-```
-
-**Changes required:**
-- Set `OPENAI_API_KEY=lm-studio` and `OPENAI_MODEL_NAME=openai/mistralai/mistral-7b-instruct-v0.3` in environment
-- Ensure LM Studio server is running at http://localhost:1234/v1
-
-### OpenAI
-```python
-def load_llm() -> LLM:
-    return LLM(
-        model="gpt-4o",
-        api_key=os.environ.get("OPENAI_API_KEY"),
-        temperature=0.3,
-    )
-```
-
-**Changes required:**
-- Set `OPENAI_API_KEY` to your OpenAI API key
-- Remove LM Studio environment variables
-
-### Anthropic
-```python
-def load_llm() -> LLM:
-    return LLM(
-        model="claude-3-5-sonnet-20241022",
-        api_key=os.environ.get("ANTHROPIC_API_KEY"),
-        temperature=0.3,
-    )
-```
-
-**Changes required:**
-- Set `ANTHROPIC_API_KEY` to your Anthropic API key
-- Remove OpenAI environment variables
-
-### Google Gemini
-```python
-def load_llm() -> LLM:
-    return LLM(
-        model="gemini-1.5-pro",
-        api_key=os.environ.get("GOOGLE_API_KEY"),
-        temperature=0.3,
-    )
-```
-
-**Changes required:**
-- Set `GOOGLE_API_KEY` to your Google Gemini API key
-- Remove OpenAI environment variables
-
-### Azure OpenAI
-```python
-def load_llm() -> LLM:
-    return LLM(
-        model="gpt-4o",
-        api_key=os.environ.get("AZURE_OPENAI_API_KEY"),
-        base_url=os.environ.get("AZURE_OPENAI_ENDPOINT"),
-        temperature=0.3,
-    )
-```
-
-**Changes required:**
-- Set `AZURE_OPENAI_API_KEY` to your Azure OpenAI key
-- Set `AZURE_OPENAI_ENDPOINT` to your Azure OpenAI endpoint URL
-- Remove LM Studio environment variables
+Edit `src/config/agents.yaml` and `src/config/tasks.yaml` to customize agent behavior and evaluation criteria. Rubrics live in `src/skills/*/SKILL.md`.
 
 ## Environment Variables
 
-Set the following environment variables before running the application:
-
-- `LM_STUDIO_URL`: LM Studio server URL (default: http://localhost:1234/v1)
-- `OPENAI_API_KEY`: OpenAI API key (if using OpenAI)
-- `OPENAI_MODEL_NAME`: OpenAI model name (default: openai/mistralai/mistral-7b-instruct-v0.3)
-- `ANTHROPIC_API_KEY`: Anthropic API key (if using Anthropic)
-- `GOOGLE_API_KEY`: Google Gemini API key (if using Gemini)
-- `AZURE_OPENAI_API_KEY`: Azure OpenAI API key (if using Azure)
-- `AZURE_OPENAI_ENDPOINT`: Azure OpenAI endpoint URL (if using Azure)
-- `TAVILY_API_KEY` : Your tavily search api key (line 20 , main.py)
+| Variable | Purpose |
+|---|---|
+| `LM_STUDIO_URL` | LM Studio server URL (default: `http://127.0.0.1:1234/v1`) |
+| `OPENAI_API_KEY` | API key (set to `lm-studio` for local) |
+| `OPENAI_MODEL_NAME` | Model name (default: `openai/mistralai/mistral-7b-instruct-v0.3`) |
+| `TAVILY_API_KEY` | Tavily search API key for market validation & regulatory research |
+| `PREEVAL_MAX_TURNS` | Max interview turns (default: 6) |
+| `VALIDATION_TIMEOUT_SECS` | Validation research timeout (default: 600) |
+| `REGULATORY_TIMEOUT_SECS` | Regulatory research timeout (default: 300) |
