@@ -113,10 +113,10 @@ def save_json(data, filename: str) -> Path:
 
 
 def load_llm() -> LLM:
-    base_url = os.environ.get("LM_STUDIO_URL", "http://10.14.140.96:1234/v1")
+    base_url = os.environ.get("LM_STUDIO_URL", "http://127.0.0.1:1234/v1")
     return LLM(
         model="openai/mistralai/mistral-7b-instruct-v0.3",
-        base_url="http://10.14.140.96:1234/v1",
+        base_url="http://127.0.0.1:1234/v1",
         api_key="lm-studio",
         temperature=0.2,
     )
