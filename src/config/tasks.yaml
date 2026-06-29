@@ -1,37 +1,87 @@
-ethics_task:
+validation_task:
   description: >
-    {ethics_rubric}
+    Validate the founder's assumptions and market claims using search.
  
-    ---
- 
-    Evaluate this idea for ethical concerns:
- 
+    Founder input:
     {preeval_json}
  
     ---
  
-    Apply the three gates exactly as defined in the rubric above.
-    Use ONLY evidence present in the idea. Do not infer missing facts.
-    Do not block ideas merely because they are in a regulated space.
-    Block only if a gate is structurally RED.
+    Your goal: gather just enough search evidence to assess each assumption as
+    CONFIRMED, UNCONFIRMED, or CONTRADICTED, and to describe the competitor landscape.
  
+    Search budget — MAXIMUM 3 searches total across all assumptions:
+    - Combine related assumptions into a single broad query where possible
+      (e.g. "IoT predictive maintenance India SME market" covers market size,
+      geography, and sector in one go)
+    - Do not search each assumption individually if a single query can cover several
+    - If you have already found relevant evidence for an assumption from a prior
+      search, do NOT search again for that assumption — reuse what you have
+    - If search returns nothing, mark the assumption UNCONFIRMED; do not retry
+ 
+    For each assumption, write one sentence stating what was found and the verdict.
+    Also write a short competitor landscape paragraph and any market notes.
+ 
+    A separate step will convert your findings to JSON — do NOT produce JSON yourself.
+    Stop as soon as you have covered all assumptions (even partially) and the
+    competitor landscape. Do not keep searching after your 3-search budget is used.
+ 
+  expected_output: >
+    A plain-text research summary: for each assumption, the verdict (CONFIRMED/
+    UNCONFIRMED/CONTRADICTED) and one-sentence evidence; a competitor landscape
+    paragraph; and market notes relevant to TIPSC scoring.
+ 
+
+  
+ethics_task:
+  description: >
+    {ethics_rubric}
+
+    ---
+
+    Evaluate this idea for ethical and regulatory concerns:
+
+    {preeval_json}
+
+    ---
+
+    Market Validation Results:
+    {validation_context}
+
+    ---
+
+    Apply all four gates exactly as defined in the rubric above.
+    Use ONLY evidence present in the idea and validation context.
+    Do not infer missing facts. Do not block ideas merely because
+    they operate in a regulated space.
+
+    For the REGULATORY gate:
+    - Identify the target geography and industry sector from preeval_json
+    - List every major regulatory framework that applies
+      (e.g. HIPAA, GDPR, RBI guidelines, SEBI, MAS, FDA, FTC, DPDP Act India)
+    - Score GREEN if navigable, YELLOW if complex but achievable,
+      RED only if the core model is structurally banned or impossible to license
+
     Return ONLY valid JSON. No markdown. No explanations. No text outside the JSON.
     Every field must be present.
- 
+
     {{
       "harm_vector": "GREEN|YELLOW|RED",
-      "harm_reason": "one sentence explaining the harm verdict",
+      "harm_reason": "one sentence",
       "legal_risk": "GREEN|YELLOW|RED",
-      "legal_reason": "one sentence explaining the legal verdict",
+      "legal_reason": "one sentence",
       "problem_solution_integrity": "GREEN|RED",
-      "integrity_reason": "one sentence explaining the integrity verdict",
+      "integrity_reason": "one sentence",
+      "regulatory_risk": "GREEN|YELLOW|RED",
+      "regulatory_reason": "one sentence explaining the regulatory verdict",
+      "applicable_regulations": ["REG1", "REG2"],
       "ethics_pass": true or false,
       "compliance_flag": true or false,
       "rejection_reason": "one sentence if ethics_pass is false, else empty string"
     }}
- 
-  expected_output: "Valid JSON matching the EthicsOutput schema exactly. No markdown, no extra keys."
 
+  expected_output: "Valid JSON matching EthicsOutput schema exactly. No markdown, no extra keys."
+  
 tipsc_task:
   description: >
     {tipsc_rubric}
@@ -41,9 +91,15 @@ tipsc_task:
     Evaluate this idea:
 
     {preeval_json}
-    
+
     ---
-    
+
+    Market Validation Research:
+
+    {validation_context}
+
+    ---
+
     Additional Founder Information:
 
     {followup_context}

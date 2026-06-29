@@ -1,0 +1,64 @@
+kafka:
+  # ── Broker ──────────────────────────────────────────────
+  bootstrap_servers: "localhost:9092"
+  
+  # ── Consumer Groups ─────────────────────────────────────
+  consumer_groups:
+    requests: "cie-evaluator-group"          # picks up new eval sessions
+    answers: "cie-evaluator-group-answers"   # routes founder answers
+
+  # ── Topics ──────────────────────────────────────────────
+  topics:
+    # Inbound (things coming INTO the pipeline)
+    requests: "cie.eval.requests"    # trigger: {"session_id": "...", "type": "start"}
+    answers: "cie.eval.answers"      # founder answers: {"session_id": "...", "answer": "..."}
+
+    # Outbound (things going OUT of the pipeline)
+    questions: "cie.eval.questions"  # agent asks founder: {"session_id": "...", "question": "...", "turn": 1}
+    results: "cie.eval.results"      # phase results: {"session_id": "...", "phase": "preeval", "result": {...}}
+    status: "cie.eval.status"        # progress: {"session_id": "...", "status": "PHASE_2_VALIDATION"}
+    errors: "cie.eval.errors"        # failures: {"session_id": "...", "error": "..."}
+
+  # ── Topic Settings ───────────────────────────────────────
+  topic_config:
+    num_partitions: 3                # increase if running multiple evaluator instances
+    replication_factor: 1            # set to 3 in production with multi-broker setup
+    retention_ms: 86400000           # 24 hours — eval sessions don't need long retention
+
+  # ── Producer Settings ────────────────────────────────────
+  producer:
+    acks: "all"                      # wait for all replicas — don't lose eval results
+    retries: 3
+    retry_backoff_ms: 500
+    compression_type: "gzip"         # eval JSONs can be large (full TIPSC output)
+
+  # ── Consumer Settings ────────────────────────────────────
+  consumer:
+    auto_offset_reset: "earliest"    # for requests — don't miss a session on restart
+    enable_auto_commit: true
+    auto_commit_interval_ms: 1000
+    session_timeout_ms: 30000
+    max_poll_interval_ms: 600000     # 10 min — LLM phases can be slow
+
+  # ── Session Settings ─────────────────────────────────────
+  session:
+    answer_timeout_seconds: 600      # how long to wait for a founder to answer (10 min)
+    max_concurrent_sessions: 10      # thread pool size for parallel evaluations
+
+  # ── Environment Overrides ────────────────────────────────
+  # These are overridden by environment variables in production:
+  #   KAFKA_BOOTSTRAP_SERVERS
+  #   KAFKA_GROUP_ID
+  environments:
+    local:
+      bootstrap_servers: "localhost:9092"
+      replication_factor: 1
+
+    staging:
+      bootstrap_servers: "kafka-staging:9092"
+      replication_factor: 2
+
+    production:
+      bootstrap_servers: "kafka-prod-1:9092,kafka-prod-2:9092,kafka-prod-3:9092"
+      replication_factor: 3
+      num_partitions: 6

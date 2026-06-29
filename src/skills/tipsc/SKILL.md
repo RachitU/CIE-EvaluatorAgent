@@ -1,6 +1,13 @@
 Use only evidence explicitly provided by the founder.
 Do not infer missing facts.
 
+> **Note:** Regulatory risk is pre-screened by the Ethics gate before
+> TIPSC runs. A YELLOW regulatory flag will appear in `validation_context`
+> as a compliance_flag. Factor this into the **S (Solvability)** score —
+> if the founder has not addressed how they will navigate the flagged
+> regulations, lean toward YELLOW on S even if the technical solution
+> is sound.
+
 SOLUTION ALIGNMENT:
 - GREEN: proposed solution directly addresses the stated problem.
 - YELLOW: proposed solution partially addresses the problem.

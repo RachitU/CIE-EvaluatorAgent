@@ -33,6 +33,8 @@ class PreEvalOutput(BaseModel):
     consequence: str
     assumptions: list[str]
     proposed_solution: str
+    target_geography: str
+    industry_sector: str
 
     @field_validator("assumptions", mode="before")
     @classmethod
@@ -46,6 +48,8 @@ class PreEvalOutput(BaseModel):
         "customer_segment",
         "consequence",
         "proposed_solution",
+        "target_geography",
+        "industry_sector",
         mode="before"
     )
     @classmethod
@@ -55,6 +59,38 @@ class PreEvalOutput(BaseModel):
         return v
 
 
+class AssumptionCheck(BaseModel):
+    assumption: str
+    verdict: Literal["CONFIRMED", "UNCONFIRMED", "CONTRADICTED"]
+    evidence: str
+
+    @field_validator("verdict", mode="before")
+    @classmethod
+    def uppercase_verdict(cls, v):
+        return v.strip().upper() if isinstance(v, str) else v
+
+    @field_validator("evidence", mode="before")
+    @classmethod
+    def normalize_evidence(cls, v):
+        if v is None:
+            return "No evidence found."
+        return str(v)
+
+
+class ValidationOutput(BaseModel):
+    target_geography: str
+    industry_sector: str
+    checked_assumptions: list[AssumptionCheck]
+    competitor_landscape: str
+    market_notes: str
+    validation_summary: Literal["STRONG", "MIXED", "WEAK"]
+
+    @field_validator("validation_summary", mode="before")
+    @classmethod
+    def uppercase_summary(cls, v):
+        return v.strip().upper() if isinstance(v, str) else v
+
+
 class EthicsOutput(BaseModel):
     harm_vector: Literal["GREEN", "YELLOW", "RED"]
     harm_reason: str
@@ -62,6 +98,9 @@ class EthicsOutput(BaseModel):
     legal_reason: str
     problem_solution_integrity: Literal["GREEN", "RED"]
     integrity_reason: str
+    regulatory_risk: Literal["GREEN", "YELLOW", "RED"]
+    regulatory_reason: str
+    applicable_regulations: list[str] 
     ethics_pass: bool
     compliance_flag: bool
     rejection_reason: str  # empty string when ethics_pass is True
@@ -70,19 +109,53 @@ class EthicsOutput(BaseModel):
         "harm_vector",
         "legal_risk",
         "problem_solution_integrity",
+        "regulatory_risk",          # ← ADD THIS
         mode="before",
     )
     @classmethod
     def uppercase_scores(cls, v):
         return v.strip().upper() if isinstance(v, str) else v
- 
-    @field_validator("rejection_reason", mode="before")
+
+    @field_validator("applicable_regulations", mode="before")  # ← ADD THIS
     @classmethod
-    def normalize_rejection(cls, v):
+    def normalize_regulations(cls, v):
         if v is None:
-            return ""
-        return str(v)
- 
+            return []
+        if isinstance(v, str):
+            return [v]
+        return v
+
+    @model_validator(mode="after")
+    def enforce_aggregation_rules(self) -> "EthicsOutput":
+        # ADD regulatory_risk to the gates list
+        gates = [
+            self.harm_vector,
+            self.legal_risk,
+            self.problem_solution_integrity,
+            self.regulatory_risk,           # ← ADD THIS
+        ]
+
+        correct_pass = "RED" not in gates
+        if self.ethics_pass != correct_pass:
+            self.ethics_pass = correct_pass
+
+        correct_compliance_flag = (
+            self.legal_risk == "YELLOW"
+            or self.regulatory_risk == "YELLOW"  # ← ADD THIS
+        )
+        if self.compliance_flag != correct_compliance_flag:
+            self.compliance_flag = correct_compliance_flag
+
+        if not self.ethics_pass and not self.rejection_reason:
+            failed_gate = (
+                "harm_vector" if self.harm_vector == "RED"
+                else "legal_risk" if self.legal_risk == "RED"
+                else "regulatory_risk" if self.regulatory_risk == "RED"   # ← ADD
+                else "problem_solution_integrity"
+            )
+            self.rejection_reason = f"Blocked: {failed_gate} gate scored RED."
+
+        return self
 
 
 class TIPSCOutput(BaseModel):
@@ -131,7 +204,7 @@ class TIPSCOutput(BaseModel):
             correct_readiness = "MODERATE"
 
         if self.overall_readiness != correct_readiness:
-            print(f"  [Auto-correct] overall_readiness: {self.overall_readiness} → {correct_readiness}")
+            print(f"  [Auto-correct] overall_readiness: {self.overall_readiness} -> {correct_readiness}")
             self.overall_readiness = correct_readiness
 
         # Recompute ready_for_dfv using the corrected readiness
@@ -143,7 +216,7 @@ class TIPSCOutput(BaseModel):
             correct_dfv = True
 
         if self.ready_for_dfv != correct_dfv:
-            print(f"  [Auto-correct] ready_for_dfv: {self.ready_for_dfv} → {correct_dfv}")
+            print(f"  [Auto-correct] ready_for_dfv: {self.ready_for_dfv} -> {correct_dfv}")
             self.ready_for_dfv = correct_dfv
 
         return self
